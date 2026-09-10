@@ -1,9 +1,11 @@
+import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { normalizeMessageIntent } from "../lib/messages";
 import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 import {
   db,
+  jobImportEventsTable,
   jobsTable,
   activityEventsTable,
   messagesTable,
@@ -14,6 +16,7 @@ import {
 import {
   CreateJobBody,
   CreateTeamMemberBody,
+  ImportElevateJobBody,
   ListJobsQueryParams,
   SendJobMessageBody,
   SendJobMessageParams,
@@ -253,11 +256,38 @@ async function mapJob(job: Job) {
     frequency: job.frequency,
     notes: job.notes,
     clientPhone: job.clientPhone,
+    externalSource: job.externalSource,
+    externalId: job.externalId,
     team: allMembers.filter((member) => job.teamMemberIds.includes(member.id)).map(mapMember),
     checklist: (job.checklist ?? []) as ChecklistItem[],
     photos: (job.photos ?? []) as Photo[],
     createdAt: job.createdAt.toISOString(),
   };
+}
+
+function secureEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function normalizePersonName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function timeParts(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? "";
+  return { date: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` };
 }
 
 router.get("/dashboard/summary", async (_req, res) => {
@@ -477,6 +507,196 @@ router.post("/team", requireRole("owner", "manager"), async (req, res) => {
     .values({ ...parsed.data, status: "available", initials: initials(parsed.data.name) })
     .returning();
   res.status(201).json(mapMember(member));
+});
+
+router.post("/integrations/elevate/jobs", async (req, res): Promise<void> => {
+  const configuredSecret = process.env.SESSION_SECRET;
+  const signature = req.header("X-Mawii-Signature") ?? "";
+  if (!configuredSecret || !secureEqual(signature, configuredSecret)) {
+    req.log.warn("Rejected Elevate OS webhook with an invalid signature");
+    res.status(401).json({ error: "Invalid webhook signature" });
+    return;
+  }
+
+  const parsed = ImportElevateJobBody.safeParse(req.body);
+  if (!parsed.success) {
+    const externalId =
+      typeof req.body === "object" && req.body !== null && typeof req.body.appointmentId === "string"
+        ? req.body.appointmentId
+        : null;
+    await db.insert(jobImportEventsTable).values({
+      source: "elevate_os",
+      externalId,
+      success: false,
+      message: "Appointment payload was missing or contained invalid fields",
+    });
+    req.log.warn({ externalId, errors: parsed.error.issues }, "Elevate OS import validation failed");
+    res.status(400).json({ error: "Invalid appointment payload" });
+    return;
+  }
+
+  const appointment = parsed.data;
+  const members = uniqueMembers(await db.select().from(teamMembersTable));
+  const workerName = appointment.assignedWorker?.trim();
+  const matchedWorker = workerName
+    ? members.find((member) => normalizePersonName(member.name) === normalizePersonName(workerName))
+    : undefined;
+  const warnings =
+    workerName && !matchedWorker
+      ? [`Assigned worker "${workerName}" does not match anyone in the Mawii team roster`]
+      : [];
+  const startsAt = timeParts(appointment.dateTime);
+  const calculatedEnd = appointment.endDateTime
+    ?? new Date(appointment.dateTime.getTime() + (appointment.durationMinutes ?? 60) * 60_000);
+  const endsAt = timeParts(calculatedEnd);
+  const importedStatus =
+    appointment.status === "completed"
+      ? "completed"
+      : appointment.status === "in_progress"
+        ? "in_progress"
+        : appointment.status === "attention" || appointment.status === "cancelled"
+          ? "attention"
+          : "scheduled";
+  const jobValues = {
+    clientName: appointment.clientName,
+    clientPhone: appointment.clientPhone,
+    address: appointment.address,
+    scheduledDate: startsAt.date,
+    startTime: startsAt.time,
+    endTime: endsAt.time,
+    serviceType: appointment.appointment,
+    serviceVariant: appointment.variant,
+    addOns: appointment.addOns ?? [],
+    durationMinutes: appointment.durationMinutes,
+    frequency: appointment.frequency,
+    notes: appointment.notes,
+  };
+  const updateExisting = async (existing: Job) => {
+    const workerUpdate = workerName
+      ? { teamMemberIds: matchedWorker ? [matchedWorker.id] : existing.teamMemberIds }
+      : {};
+    const statusUpdate = appointment.status ? { status: importedStatus } : {};
+    const checklistUpdate =
+      appointment.appointment !== existing.serviceType
+        ? { checklist: checklistForService(appointment.appointment) }
+        : {};
+    const [updated] = await db
+      .update(jobsTable)
+      .set({ ...jobValues, ...workerUpdate, ...statusUpdate, ...checklistUpdate })
+      .where(eq(jobsTable.id, existing.id))
+      .returning();
+    const message = warnings.length
+      ? "Existing appointment updated with a worker-matching warning"
+      : "Existing appointment updated without creating a duplicate";
+    await db.insert(jobImportEventsTable).values({
+      source: "elevate_os",
+      externalId: appointment.appointmentId,
+      success: true,
+      duplicate: true,
+      message,
+      jobId: updated.id,
+    });
+    res.json({
+      success: true,
+      duplicate: true,
+      message,
+      job: await mapJob(updated),
+      warnings,
+    });
+    return updated;
+  };
+
+  try {
+    const [existing] = await db
+      .select()
+      .from(jobsTable)
+      .where(and(
+        eq(jobsTable.externalSource, "elevate_os"),
+        eq(jobsTable.externalId, appointment.appointmentId),
+      ));
+    if (existing) {
+      await updateExisting(existing);
+      return;
+    }
+
+    const [inserted] = await db
+      .insert(jobsTable)
+      .values({
+        ...jobValues,
+        status: importedStatus,
+        externalSource: "elevate_os",
+        externalId: appointment.appointmentId,
+        teamMemberIds: matchedWorker ? [matchedWorker.id] : [],
+        checklist: checklistForService(appointment.appointment),
+        photos: [],
+      })
+      .onConflictDoNothing({
+        target: [jobsTable.externalSource, jobsTable.externalId],
+      })
+      .returning();
+    if (!inserted) {
+      const [concurrent] = await db
+        .select()
+        .from(jobsTable)
+        .where(and(
+          eq(jobsTable.externalSource, "elevate_os"),
+          eq(jobsTable.externalId, appointment.appointmentId),
+        ));
+      if (!concurrent) throw new Error("Conflicting Elevate job was not found after insert");
+      await updateExisting(concurrent);
+      return;
+    }
+    const message = warnings.length
+      ? "Appointment imported with a worker-matching warning"
+      : "Appointment imported successfully";
+    await db.insert(jobImportEventsTable).values({
+      source: "elevate_os",
+      externalId: appointment.appointmentId,
+      success: true,
+      message,
+      jobId: inserted.id,
+    });
+    res.status(201).json({
+      success: true,
+      duplicate: false,
+      message,
+      job: await mapJob(inserted),
+      warnings,
+    });
+  } catch (error) {
+    req.log.error({ error, externalId: appointment.appointmentId }, "Elevate OS import failed");
+    await db.insert(jobImportEventsTable).values({
+      source: "elevate_os",
+      externalId: appointment.appointmentId,
+      success: false,
+      message: "Mawii could not save this appointment",
+    });
+    res.status(422).json({ error: "Appointment could not be imported" });
+  }
+});
+
+router.get("/integrations/elevate/status", async (_req, res): Promise<void> => {
+  const events = await db
+    .select()
+    .from(jobImportEventsTable)
+    .where(eq(jobImportEventsTable.source, "elevate_os"))
+    .orderBy(desc(jobImportEventsTable.receivedAt));
+  res.json({
+    method: "gohighlevel_webhook",
+    configured: Boolean(process.env.SESSION_SECRET),
+    totalReceived: events.length,
+    failedCount: events.filter((event) => !event.success).length,
+    lastReceivedAt: events[0]?.receivedAt.toISOString() ?? null,
+    recentEvents: events.slice(0, 8).map((event) => ({
+      id: event.id,
+      externalId: event.externalId,
+      success: event.success,
+      duplicate: event.duplicate,
+      message: event.message,
+      jobId: event.jobId,
+      receivedAt: event.receivedAt.toISOString(),
+    })),
+  });
 });
 
 export default router;

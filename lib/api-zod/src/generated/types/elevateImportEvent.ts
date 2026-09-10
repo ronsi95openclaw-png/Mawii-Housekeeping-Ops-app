@@ -5,18 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { ActivityType } from './activityType';
 
-export interface Activity {
+export interface ElevateImportEvent {
   id: number;
-  type: ActivityType;
-  title: string;
-  detail: string;
-  createdAt: Date;
-  /** @nullable */
-  externalSource?: string | null;
   /** @nullable */
   externalId?: string | null;
+  success: boolean;
+  duplicate: boolean;
+  message: string;
   /** @nullable */
   jobId?: number | null;
+  receivedAt: Date;
 }

@@ -102,6 +102,10 @@ export interface Activity {
   detail: string;
   createdAt: string;
   /** @nullable */
+  externalSource?: string | null;
+  /** @nullable */
+  externalId?: string | null;
+  /** @nullable */
   jobId?: number | null;
 }
 
@@ -256,6 +260,77 @@ export interface Message {
   metadata?: MessageMetadata;
   /** @nullable */
   actorClerkUserId?: string | null;
+}
+
+export type ElevateJobInputStatus = typeof ElevateJobInputStatus[keyof typeof ElevateJobInputStatus];
+
+
+export const ElevateJobInputStatus = {
+  scheduled: 'scheduled',
+  confirmed: 'confirmed',
+  in_progress: 'in_progress',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  attention: 'attention',
+} as const;
+
+export interface ElevateJobInput {
+  /** @minLength 1 */
+  appointmentId: string;
+  /** @minLength 1 */
+  clientName: string;
+  clientPhone?: string;
+  /** @minLength 1 */
+  address: string;
+  /** @minLength 1 */
+  appointment: string;
+  variant?: string;
+  addOns?: string[];
+  /** @minimum 1 */
+  durationMinutes?: number;
+  frequency?: string;
+  dateTime: string;
+  endDateTime?: string;
+  status?: ElevateJobInputStatus;
+  assignedWorker?: string;
+  notes?: string;
+}
+
+export interface ElevateImportResult {
+  success: boolean;
+  duplicate: boolean;
+  message: string;
+  job?: Job | null;
+  warnings?: string[];
+}
+
+export interface ElevateImportEvent {
+  id: number;
+  /** @nullable */
+  externalId?: string | null;
+  success: boolean;
+  duplicate: boolean;
+  message: string;
+  /** @nullable */
+  jobId?: number | null;
+  receivedAt: string;
+}
+
+export type ElevateImportStatusMethod = typeof ElevateImportStatusMethod[keyof typeof ElevateImportStatusMethod];
+
+
+export const ElevateImportStatusMethod = {
+  gohighlevel_webhook: 'gohighlevel_webhook',
+} as const;
+
+export interface ElevateImportStatus {
+  method: ElevateImportStatusMethod;
+  configured: boolean;
+  totalReceived: number;
+  failedCount: number;
+  /** @nullable */
+  lastReceivedAt?: string | null;
+  recentEvents: ElevateImportEvent[];
 }
 
 export interface UploadInput {

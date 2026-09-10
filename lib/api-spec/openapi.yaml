@@ -20,6 +20,8 @@ tags:
     description: Recent operations activity
   - name: storage
     description: Protected object storage uploads
+  - name: integrations
+    description: External job intake
 paths:
   /healthz:
     get:
@@ -213,6 +215,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TeamMember"
+  /integrations/elevate/jobs:
+    post:
+      operationId: importElevateJob
+      tags: [integrations]
+      summary: Receive an Elevate OS appointment webhook
+      parameters:
+        - name: X-Mawii-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ElevateJobInput"
+      responses:
+        "200":
+          description: Existing appointment updated without creating a duplicate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElevateImportResult"
+        "201":
+          description: Appointment imported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElevateImportResult"
+        "400":
+          description: Invalid appointment payload
+        "401":
+          description: Invalid webhook signature
+        "422":
+          description: Appointment could not be imported
+  /integrations/elevate/status:
+    get:
+      operationId: getElevateImportStatus
+      tags: [integrations]
+      summary: Get Elevate OS import health and recent deliveries
+      responses:
+        "200":
+          description: Elevate import status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElevateImportStatus"
   /storage/uploads/request-url:
     post:
       operationId: requestUploadUrl
@@ -554,6 +604,10 @@ components:
         createdAt:
           type: string
           format: date-time
+        externalSource:
+          type: ["string", "null"]
+        externalId:
+          type: ["string", "null"]
         jobId:
           type: ["integer", "null"]
     Job:
@@ -802,6 +856,105 @@ components:
           type: object
         actorClerkUserId:
           type: ["string", "null"]
+    ElevateJobInput:
+      type: object
+      required: [appointmentId, clientName, address, appointment, dateTime]
+      properties:
+        appointmentId:
+          type: string
+          minLength: 1
+        clientName:
+          type: string
+          minLength: 1
+        clientPhone:
+          type: string
+        address:
+          type: string
+          minLength: 1
+        appointment:
+          type: string
+          minLength: 1
+        variant:
+          type: string
+        addOns:
+          type: array
+          items:
+            type: string
+        durationMinutes:
+          type: integer
+          minimum: 1
+        frequency:
+          type: string
+        dateTime:
+          type: string
+          format: date-time
+        endDateTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [scheduled, confirmed, in_progress, completed, cancelled, attention]
+        assignedWorker:
+          type: string
+        notes:
+          type: string
+    ElevateImportResult:
+      type: object
+      required: [success, duplicate, message]
+      properties:
+        success:
+          type: boolean
+        duplicate:
+          type: boolean
+        message:
+          type: string
+        job:
+          anyOf:
+            - $ref: "#/components/schemas/Job"
+            - type: "null"
+        warnings:
+          type: array
+          items:
+            type: string
+    ElevateImportEvent:
+      type: object
+      required: [id, success, duplicate, message, receivedAt]
+      properties:
+        id:
+          type: integer
+        externalId:
+          type: ["string", "null"]
+        success:
+          type: boolean
+        duplicate:
+          type: boolean
+        message:
+          type: string
+        jobId:
+          type: ["integer", "null"]
+        receivedAt:
+          type: string
+          format: date-time
+    ElevateImportStatus:
+      type: object
+      required: [method, configured, totalReceived, failedCount, recentEvents]
+      properties:
+        method:
+          type: string
+          enum: [gohighlevel_webhook]
+        configured:
+          type: boolean
+        totalReceived:
+          type: integer
+        failedCount:
+          type: integer
+        lastReceivedAt:
+          type: ["string", "null"]
+          format: date-time
+        recentEvents:
+          type: array
+          items:
+            $ref: "#/components/schemas/ElevateImportEvent"
     UploadInput:
       type: object
       required: [name, size, contentType]

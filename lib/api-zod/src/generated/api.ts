@@ -73,6 +73,8 @@ export const GetActivityResponseItem = zod.object({
   "title": zod.string(),
   "detail": zod.string(),
   "createdAt": zod.coerce.date(),
+  "externalSource": zod.string().nullish(),
+  "externalId": zod.string().nullish(),
   "jobId": zod.number().int().nullish()
 })
 export const GetActivityResponse = zod.array(GetActivityResponseItem)
@@ -421,6 +423,102 @@ export const CreateTeamMemberResponse = zod.object({
   "phone": zod.string(),
   "status": zod.enum(['available', 'assigned', 'off']),
   "initials": zod.string().optional()
+})
+
+
+/**
+ * @summary Receive an Elevate OS appointment webhook
+ */
+export const ImportElevateJobHeader = zod.object({
+  "X-Mawii-Signature": zod.string()
+})
+
+
+
+
+
+
+
+
+export const ImportElevateJobBody = zod.object({
+  "appointmentId": zod.string().min(1),
+  "clientName": zod.string().min(1),
+  "clientPhone": zod.string().optional(),
+  "address": zod.string().min(1),
+  "appointment": zod.string().min(1),
+  "variant": zod.string().optional(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().min(1).optional(),
+  "frequency": zod.string().optional(),
+  "dateTime": zod.coerce.date(),
+  "endDateTime": zod.coerce.date().optional(),
+  "status": zod.enum(['scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled', 'attention']).optional(),
+  "assignedWorker": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+export const ImportElevateJobResponse = zod.object({
+  "success": zod.boolean(),
+  "duplicate": zod.boolean(),
+  "message": zod.string(),
+  "job": zod.union([zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']),
+  "serviceType": zod.string(),
+  "serviceVariant": zod.string().nullish(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().nullish(),
+  "frequency": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "team": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "role": zod.string(),
+  "phone": zod.string(),
+  "status": zod.enum(['available', 'assigned', 'off']),
+  "initials": zod.string().optional()
+})),
+  "checklist": zod.array(zod.object({
+  "id": zod.number().int(),
+  "label": zod.string(),
+  "completed": zod.boolean()
+})),
+  "photos": zod.array(zod.object({
+  "id": zod.number().int(),
+  "url": zod.string().url(),
+  "label": zod.string(),
+  "createdAt": zod.coerce.date()
+})).optional(),
+  "clientPhone": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+}),zod.null()]).optional(),
+  "warnings": zod.array(zod.string()).optional()
+})
+
+
+/**
+ * @summary Get Elevate OS import health and recent deliveries
+ */
+export const GetElevateImportStatusResponse = zod.object({
+  "method": zod.enum(['gohighlevel_webhook']),
+  "configured": zod.boolean(),
+  "totalReceived": zod.number().int(),
+  "failedCount": zod.number().int(),
+  "lastReceivedAt": zod.coerce.date().nullish(),
+  "recentEvents": zod.array(zod.object({
+  "id": zod.number().int(),
+  "externalId": zod.string().nullish(),
+  "success": zod.boolean(),
+  "duplicate": zod.boolean(),
+  "message": zod.string(),
+  "jobId": zod.number().int().nullish(),
+  "receivedAt": zod.coerce.date()
+}))
 })
 
 

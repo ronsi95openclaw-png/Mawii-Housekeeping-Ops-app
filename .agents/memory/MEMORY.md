@@ -1,0 +1,1 @@
+- [Elevate job intake](elevate-job-intake.md) — Elevate OS intake uses GoHighLevel webhooks; schedule times are interpreted in the DFW business timezone.

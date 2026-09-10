@@ -31,6 +31,9 @@ import type {
   Customer,
   CustomerInput,
   DashboardSummary,
+  ElevateImportResult,
+  ElevateImportStatus,
+  ElevateJobInput,
   Employee,
   EmployeeInput,
   EmployeeUpdate,
@@ -932,6 +935,154 @@ export const useCreateTeamMember = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreateTeamMemberMutationOptions(options));
     }
+
+export const getImportElevateJobUrl = () => {
+
+
+
+
+  return `/api/integrations/elevate/jobs`
+}
+
+/**
+ * @summary Receive an Elevate OS appointment webhook
+ */
+export const importElevateJob = async (elevateJobInput: ElevateJobInput, options?: Parameters<typeof customFetch>[1]): Promise<ElevateImportResult> => {
+
+  return customFetch<ElevateImportResult>(getImportElevateJobUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(elevateJobInput)
+  }
+);}
+
+
+
+
+
+export const getImportElevateJobMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importElevateJob>>, TError,{data: BodyType<ElevateJobInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importElevateJob>>, TError,{data: BodyType<ElevateJobInput>}, TContext> => {
+
+const mutationKey = ['importElevateJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importElevateJob>>, {data: BodyType<ElevateJobInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  importElevateJob(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportElevateJobMutationResult = NonNullable<Awaited<ReturnType<typeof importElevateJob>>>
+    export type ImportElevateJobMutationBody = BodyType<ElevateJobInput>
+    export type ImportElevateJobMutationError = ErrorType<void>
+
+    /**
+ * @summary Receive an Elevate OS appointment webhook
+ */
+export const useImportElevateJob = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importElevateJob>>, TError,{data: BodyType<ElevateJobInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importElevateJob>>,
+        TError,
+        {data: BodyType<ElevateJobInput>},
+        TContext
+      > => {
+      return useMutation(getImportElevateJobMutationOptions(options));
+    }
+
+export const getGetElevateImportStatusUrl = () => {
+
+
+
+
+  return `/api/integrations/elevate/status`
+}
+
+/**
+ * @summary Get Elevate OS import health and recent deliveries
+ */
+export const getElevateImportStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<ElevateImportStatus> => {
+
+  return customFetch<ElevateImportStatus>(getGetElevateImportStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetElevateImportStatusQueryKey = () => {
+    return [
+    `/api/integrations/elevate/status`
+    ] as const;
+    }
+
+
+export const getGetElevateImportStatusQueryOptions = <TData = Awaited<ReturnType<typeof getElevateImportStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getElevateImportStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetElevateImportStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getElevateImportStatus>>> = ({ signal }) => getElevateImportStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getElevateImportStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetElevateImportStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getElevateImportStatus>>>
+export type GetElevateImportStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get Elevate OS import health and recent deliveries
+ */
+
+export function useGetElevateImportStatus<TData = Awaited<ReturnType<typeof getElevateImportStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getElevateImportStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetElevateImportStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getRequestUploadUrlUrl = () => {
 

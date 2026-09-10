@@ -1,13 +1,14 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation } from 'wouter';
 import { 
   useListJobs, useCreateJob, useGetJob, useUpdateJob, useUpdateJobChecklist, 
   useSendJobMessage, useListTeam, useListJobMessages, useListCustomers, useListCustomerAddresses,
+  useGetElevateImportStatus, getGetElevateImportStatusQueryKey,
   getListJobsQueryKey, getGetJobQueryKey, getGetDashboardSummaryQueryKey, getListJobMessagesQueryKey
 } from '@workspace/api-client-react';
 import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, ChevronRight, ClipboardCheck, MapPin, Check, MessageSquare, Phone, CheckCircle2, Send, X, ArrowRight } from 'lucide-react';
+import { Plus, Search, ChevronRight, ClipboardCheck, MapPin, Check, MessageSquare, Phone, CheckCircle2, Send, X, ArrowRight, AlertTriangle, LoaderCircle, RefreshCw } from 'lucide-react';
 import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, whatsappUrl, todayISO } from '@/lib/shared';
 
 const SERVICE_OPTIONS = ['Standard cleaning', 'Deep cleaning', 'Move In/Out cleaning'];
@@ -31,8 +32,10 @@ type NewJobForm = {
 export function Jobs() {
   const [location, setLocation] = useLocation();
   const jobs = useListJobs();
+  const elevate = useGetElevateImportStatus({ query: { queryKey: getGetElevateImportStatusQueryKey(), refetchInterval: 30_000 } });
   const create = useCreateJob();
   const queryClient = useQueryClient();
+  const lastImportEvent = useRef<number | null>(null);
   
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -40,6 +43,16 @@ export function Jobs() {
   
   const params = new URLSearchParams(location.split('?')[1] || '');
   const selectedId = Number(params.get('job')) || null;
+
+  useEffect(() => {
+    const newestEvent = elevate.data?.recentEvents?.[0]?.id;
+    if (!newestEvent) return;
+    if (lastImportEvent.current !== null && newestEvent !== lastImportEvent.current) {
+      void queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    }
+    lastImportEvent.current = newestEvent;
+  }, [elevate.data?.recentEvents, queryClient]);
   
   if (jobs.isLoading) return <LoadingState label="Loading jobs" />;
   if (jobs.isError) return <ErrorState onRetry={() => void jobs.refetch()} />;
@@ -54,6 +67,31 @@ export function Jobs() {
   return (
     <div className="content-stack">
       <PageIntro eyebrow="Work orders" title="Jobs" body="Every visit, one clear owner, no lost context." action={<button className="button button-primary" onClick={() => setShowCreate(true)} data-testid="button-create-job"><Plus size={16} />Create job</button>} />
+
+      <section className={`panel import-status ${elevate.data?.failedCount ? 'import-status-warning' : ''}`} data-testid="elevate-import-status">
+        <div className="import-status-main">
+          <span className={`import-mark ${elevate.data?.failedCount ? 'import-mark-warning' : ''}`}>
+            {elevate.isFetching ? <LoaderCircle size={17} className="spin" /> : elevate.data?.failedCount ? <AlertTriangle size={17} /> : <RefreshCw size={17} />}
+          </span>
+          <div>
+            <span className="eyebrow">Elevate OS automation</span>
+            <strong>{elevate.isError ? 'Import status unavailable' : elevate.data?.failedCount ? `${elevate.data.failedCount} failed deliver${elevate.data.failedCount === 1 ? 'y' : 'ies'} recorded` : 'Appointments import automatically'}</strong>
+            <p>{elevate.isError ? 'Mawii could not load the delivery history. Try again to confirm new appointments are arriving.' : elevate.data?.lastReceivedAt ? `Last delivery ${formatDate(elevate.data.lastReceivedAt, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · ${elevate.data.totalReceived} received` : 'Ready for the GoHighLevel workflow webhook. New and updated appointment deliveries are deduplicated by appointment ID.'}</p>
+          </div>
+        </div>
+        {elevate.data?.recentEvents?.length ? (
+          <div className="import-events">
+            {elevate.data.recentEvents.slice(0, 3).map((event) => (
+              <div key={event.id} className={event.success ? 'import-event-ok' : 'import-event-failed'}>
+                <span>{event.success ? event.duplicate ? 'Updated' : 'Imported' : 'Failed'}</span>
+                <strong>{event.externalId || 'Unknown appointment'}</strong>
+                <small>{event.message}</small>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <button className="button button-secondary" onClick={() => void elevate.refetch()} disabled={elevate.isFetching} data-testid="button-refresh-elevate-imports"><RefreshCw size={14} />Refresh</button>
+      </section>
       
       <section className="panel jobs-toolbar">
         <div className="search-wrap">
