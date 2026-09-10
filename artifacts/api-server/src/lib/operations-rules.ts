@@ -29,3 +29,11 @@ export function canTransitionPayPeriod(from: PayPeriodStatus, to: PayPeriodStatu
 export function isChronologicalTimeEntry(clockIn: Date, clockOut: Date) {
   return clockOut.getTime() >= clockIn.getTime();
 }
+
+export function isValidBreakMinutes(clockIn: Date, clockOut: Date | null | undefined, breaksMinutes: number, now = new Date()) {
+  if (!Number.isInteger(breaksMinutes) || breaksMinutes < 0) return false;
+  const end = clockOut ?? now;
+  if (!isChronologicalTimeEntry(clockIn, end)) return false;
+  const workedMinutes = Math.floor((end.getTime() - clockIn.getTime()) / 60_000);
+  return breaksMinutes <= workedMinutes;
+}
