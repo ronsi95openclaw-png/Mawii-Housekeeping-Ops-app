@@ -115,13 +115,13 @@ router.get("/employees/me", async (req, res) => {
   if (!employee) { res.status(403).json({ error: "No employee profile is linked to this Clerk user" }); return; } res.json(employee);
 });
 router.get("/employees", requireRole("owner", "manager"), async (_req, res) => res.json(await db.select().from(employeesTable).where(eq(employeesTable.active, "true"))));
-router.post("/employees", requireRole("owner", "manager"), async (req, res) => {
+router.post("/employees", requireRole("owner"), async (req, res) => {
   const input = body(req);
   if (!input.name) { res.status(400).json({ error: "name is required" }); return; }
   const [employee] = await db.insert(employeesTable).values({ name: input.name, clerkUserId: input.clerkUserId ?? `pending-${crypto.randomUUID()}`, role: input.role ?? "cleaner", phone: input.phone, active: input.active ?? "true" }).returning();
   res.status(201).json(employee);
 });
-router.patch("/employees/:id", requireRole("owner", "manager"), async (req, res) => {
+router.patch("/employees/:id", requireRole("owner"), async (req, res) => {
   const [employee] = await db.update(employeesTable).set(body(req)).where(eq(employeesTable.id, id(req.params.id))).returning();
   if (!employee) { res.status(404).json({ error: "Employee not found" }); return; } res.json(employee);
 });
