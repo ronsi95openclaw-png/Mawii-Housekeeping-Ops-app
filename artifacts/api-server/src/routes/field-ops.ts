@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from "../middlewares/auth";
 import { generateOccurrences } from "../lib/recurrence";
 import { calculateWorkedMinutes } from "../lib/time-entries";
 import { canCompleteJob, canTransitionIncident, canTransitionPayPeriod, isChronologicalTimeEntry } from "../lib/operations-rules";
+import { canCleanerAccessJob } from "../lib/job-access";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -169,7 +170,14 @@ router.get("/payouts", requireRole("owner", "manager"), async (req, res) => {
   res.json(result);
 });
 router.get("/activity/history", requireRole("owner", "manager"), async (_req, res) => res.json(await db.select().from(activityEventsTable).orderBy(asc(activityEventsTable.createdAt))));
-router.get("/jobs/:jobId/messages", async (req, res) => res.json(await db.select().from(messagesTable).where(eq(messagesTable.jobId, id(req.params.jobId))).orderBy(asc(messagesTable.createdAt))));
+router.get("/jobs/:jobId/messages", async (req, res) => {
+  const jobId = id(req.params.jobId);
+  if (!(await canCleanerAccessJob(req, jobId))) {
+    res.status(403).json({ error: "Job is not assigned to this cleaner" });
+    return;
+  }
+  res.json(await db.select().from(messagesTable).where(eq(messagesTable.jobId, jobId)).orderBy(asc(messagesTable.createdAt)));
+});
 
 router.post("/pay-periods", requireRole("owner", "manager"), async (req, res) => { const input = body(req); if (!input.startsOn || !input.endsOn) { res.status(400).json({ error: "startsOn and endsOn are required" }); return; } const [period] = await db.insert(payPeriodsTable).values({ startsOn: input.startsOn, endsOn: input.endsOn }).onConflictDoNothing().returning(); res.status(201).json(period); });
 router.get("/pay-periods", requireRole("owner", "manager"), async (_req, res) => res.json(await db.select().from(payPeriodsTable).orderBy(asc(payPeriodsTable.startsOn))));
