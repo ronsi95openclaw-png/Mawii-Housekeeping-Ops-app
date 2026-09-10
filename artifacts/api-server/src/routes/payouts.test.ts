@@ -126,7 +126,7 @@ describe("payout route authorization and pay-period lifecycle", () => {
 
         const rate = expectStatus(await request(baseUrl, "/worker-rates", {
           method: "POST",
-          headers: { "x-dev-user-id": managerUserId },
+          headers: ownerHeaders,
           body: {
             employeeId: cleaner.id,
             hourlyRate: "20.00",

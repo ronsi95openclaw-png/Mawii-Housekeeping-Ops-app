@@ -172,7 +172,7 @@ describe("owner report route boundaries", () => {
         const createRate = async (employeeId: number) => {
           const rate = expectStatus(await request(baseUrl, "/worker-rates", {
             method: "POST",
-            headers: { "x-dev-user-id": managerUserId },
+            headers: ownerHeaders,
             body: { employeeId, hourlyRate: "20.00", effectiveFrom: "2030-01-01" },
           }), 201) as { id: number };
           workerRateIds.push(rate.id);
