@@ -311,6 +311,13 @@ paths:
       tags: [field-ops]
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CustomerInput" } } } }
       responses: { "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } } }
+  /customers/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      operationId: updateCustomer
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CustomerUpdate" } } } }
+      responses: { "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } } }
   /customers/{id}/addresses:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -322,6 +329,18 @@ paths:
       tags: [field-ops]
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AddressInput" } } } }
       responses: { "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Address" } } } } }
+  /customers/{customerId}/addresses/{id}:
+    parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema: { type: integer }
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateCustomerAddress
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AddressUpdate" } } } }
+      responses: { "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Address" } } } } }
   /service-plans:
     get:
       operationId: listServicePlans
@@ -1030,6 +1049,13 @@ components:
         phone: { type: string }
         email: { type: string }
         notes: { type: string }
+    CustomerUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        phone: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
     Address:
       type: object
       required: [id, customerId, line1, city, state, postalCode]
@@ -1054,6 +1080,16 @@ components:
         state: { type: string }
         postalCode: { type: string }
         accessNotes: { type: string }
+    AddressUpdate:
+      type: object
+      properties:
+        label: { type: string }
+        line1: { type: string }
+        line2: { type: ["string", "null"] }
+        city: { type: string }
+        state: { type: string }
+        postalCode: { type: string }
+        accessNotes: { type: ["string", "null"] }
     ServicePlan:
       type: object
       required: [id, customerId, addressId, serviceType, frequency, nextOccurrence]

@@ -395,6 +395,16 @@ export interface CustomerInput {
   notes?: string;
 }
 
+export interface CustomerUpdate {
+  name?: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export interface Address {
   id: number;
   customerId: number;
@@ -417,6 +427,18 @@ export interface AddressInput {
   state: string;
   postalCode: string;
   accessNotes?: string;
+}
+
+export interface AddressUpdate {
+  label?: string;
+  line1?: string;
+  /** @nullable */
+  line2?: string | null;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  /** @nullable */
+  accessNotes?: string | null;
 }
 
 export type ServicePlanFrequency = typeof ServicePlanFrequency[keyof typeof ServicePlanFrequency];

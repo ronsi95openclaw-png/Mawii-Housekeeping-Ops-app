@@ -647,6 +647,26 @@ export const CreateCustomerResponse = zod.object({
 })
 
 
+export const UpdateCustomerParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateCustomerBody = zod.object({
+  "name": zod.string().optional(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateCustomerResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+
+
 export const ListCustomerAddressesParams = zod.object({
   "id": zod.coerce.number().int()
 })
@@ -680,6 +700,34 @@ export const CreateCustomerAddressBody = zod.object({
 })
 
 export const CreateCustomerAddressResponse = zod.object({
+  "id": zod.number().int(),
+  "customerId": zod.number().int(),
+  "label": zod.string().optional(),
+  "line1": zod.string(),
+  "line2": zod.string().nullish(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "postalCode": zod.string(),
+  "accessNotes": zod.string().nullish()
+})
+
+
+export const UpdateCustomerAddressParams = zod.object({
+  "customerId": zod.coerce.number().int(),
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateCustomerAddressBody = zod.object({
+  "label": zod.string().optional(),
+  "line1": zod.string().optional(),
+  "line2": zod.string().nullish(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "postalCode": zod.string().optional(),
+  "accessNotes": zod.string().nullish()
+})
+
+export const UpdateCustomerAddressResponse = zod.object({
   "id": zod.number().int(),
   "customerId": zod.number().int(),
   "label": zod.string().optional(),
