@@ -10,6 +10,14 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: dashboard
+    description: Operations overview
+  - name: jobs
+    description: Cleaning jobs
+  - name: team
+    description: Team members
+  - name: activity
+    description: Recent operations activity
 paths:
   /healthz:
     get:
@@ -24,7 +32,193 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get operations dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /activity:
+    get:
+      operationId: getActivity
+      tags: [activity]
+      summary: Get recent operations activity
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Activity"
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: List cleaning jobs
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [scheduled, in_progress, completed, attention]
+      responses:
+        "200":
+          description: Cleaning jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+    post:
+      operationId: createJob
+      tags: [jobs]
+      summary: Create a cleaning job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobInput"
+      responses:
+        "201":
+          description: Created job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+  /jobs/{id}:
+    get:
+      operationId: getJob
+      tags: [jobs]
+      summary: Get a cleaning job
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Cleaning job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Job not found
+    patch:
+      operationId: updateJob
+      tags: [jobs]
+      summary: Update a cleaning job
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobUpdate"
+      responses:
+        "200":
+          description: Updated job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+  /jobs/{id}/checklist:
+    patch:
+      operationId: updateJobChecklist
+      tags: [jobs]
+      summary: Update checklist completion for a job
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChecklistUpdate"
+      responses:
+        "200":
+          description: Updated job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+  /jobs/{id}/messages:
+    post:
+      operationId: sendJobMessage
+      tags: [jobs]
+      summary: Send a job message
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageInput"
+      responses:
+        "201":
+          description: Sent message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+  /team:
+    get:
+      operationId: listTeam
+      tags: [team]
+      summary: List team members
+      responses:
+        "200":
+          description: Team members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamMember"
+    post:
+      operationId: createTeamMember
+      tags: [team]
+      summary: Add a team member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamMemberInput"
+      responses:
+        "201":
+          description: Created team member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
 components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +227,211 @@ components:
           type: string
       required:
         - status
+    DashboardSummary:
+      type: object
+      required: [todayJobs, openJobs, completedThisWeek, attentionNeeded, nextJob]
+      properties:
+        todayJobs:
+          type: integer
+        openJobs:
+          type: integer
+        completedThisWeek:
+          type: integer
+        attentionNeeded:
+          type: integer
+        nextJob:
+          anyOf:
+            - $ref: "#/components/schemas/Job"
+            - type: "null"
+    Activity:
+      type: object
+      required: [id, type, title, detail, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [job, message, checklist, photo, team]
+        title:
+          type: string
+        detail:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        jobId:
+          type: ["integer", "null"]
+    Job:
+      type: object
+      required: [id, clientName, address, scheduledDate, startTime, endTime, status, serviceType, team, checklist]
+      properties:
+        id:
+          type: integer
+        clientName:
+          type: string
+        address:
+          type: string
+        scheduledDate:
+          type: string
+          format: date
+        startTime:
+          type: string
+        endTime:
+          type: string
+        status:
+          type: string
+          enum: [scheduled, in_progress, completed, attention]
+        serviceType:
+          type: string
+        notes:
+          type: ["string", "null"]
+        team:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamMember"
+        checklist:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChecklistItem"
+        photos:
+          type: array
+          items:
+            $ref: "#/components/schemas/Photo"
+        clientPhone:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+    JobInput:
+      type: object
+      required: [clientName, address, scheduledDate, startTime, endTime, serviceType]
+      properties:
+        clientName:
+          type: string
+          minLength: 1
+        address:
+          type: string
+          minLength: 1
+        scheduledDate:
+          type: string
+          format: date
+        startTime:
+          type: string
+        endTime:
+          type: string
+        serviceType:
+          type: string
+        notes:
+          type: string
+        clientPhone:
+          type: string
+        teamMemberIds:
+          type: array
+          items:
+            type: integer
+    JobUpdate:
+      type: object
+      properties:
+        scheduledDate:
+          type: string
+          format: date
+        startTime:
+          type: string
+        endTime:
+          type: string
+        status:
+          type: string
+          enum: [scheduled, in_progress, completed, attention]
+        notes:
+          type: string
+        teamMemberIds:
+          type: array
+          items:
+            type: integer
+    ChecklistItem:
+      type: object
+      required: [id, label, completed]
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+        completed:
+          type: boolean
+    ChecklistUpdate:
+      type: object
+      required: [itemId, completed]
+      properties:
+        itemId:
+          type: integer
+        completed:
+          type: boolean
+    Photo:
+      type: object
+      required: [id, url, label, createdAt]
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+          format: uri
+        label:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    TeamMember:
+      type: object
+      required: [id, name, role, phone, status]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        role:
+          type: string
+        phone:
+          type: string
+        status:
+          type: string
+          enum: [available, assigned, off]
+        initials:
+          type: string
+    TeamMemberInput:
+      type: object
+      required: [name, role, phone]
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+        phone:
+          type: string
+    MessageInput:
+      type: object
+      required: [recipient, body]
+      properties:
+        recipient:
+          type: string
+          enum: [client, team]
+        body:
+          type: string
+          minLength: 1
+    Message:
+      type: object
+      required: [id, recipient, body, status, createdAt]
+      properties:
+        id:
+          type: integer
+        recipient:
+          type: string
+          enum: [client, team]
+        body:
+          type: string
+        status:
+          type: string
+          enum: [queued, sent, failed]
+        createdAt:
+          type: string
+          format: date-time
 

@@ -1,6 +1,6 @@
-# [Project name]
+# Housekeeping Ops
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+An operations desk for coordinating housekeeping jobs, crew assignments, reminders, checklists, and proof-of-service documentation.
 
 ## Run & Operate
 
@@ -22,15 +22,21 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/housekeeping-ops/src/App.tsx` — responsive operations dashboard and workflows
+- `artifacts/housekeeping-ops/src/index.css` — product theme and responsive styles
+- `lib/api-spec/openapi.yaml` — source of truth for job, team, activity, dashboard, checklist, and messaging APIs
+- `artifacts/api-server/src/routes/operations.ts` — operations API handlers and dev seed data
+- `lib/db/src/schema/operations.ts` — PostgreSQL schema for jobs and team members
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Calendar days use date-only storage in PostgreSQL to avoid timezone shifts in schedule views.
+- The first build keeps outbound messages queued at the API boundary so SMS delivery can be connected without coupling the UI to a provider.
+- Job checklists and proof-photo metadata travel with the job record so the closeout view stays focused on one work order.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Housekeeping Ops gives owners a live overview of today’s work, a visual week schedule, searchable jobs, a team roster, checklist closeout, proof-photo display, and job-level client messaging. It is designed for the two-person operations desk that receives jobs from Elevate OS and dispatches the field team.
 
 ## User preferences
 
@@ -38,7 +44,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- After changing `lib/api-spec/openapi.yaml`, run `pnpm --filter @workspace/api-spec run codegen` before typechecking the server or frontend.
+- The API seed is only for the development workspace; production records should come from the authenticated app flow.
 
 ## Pointers
 
