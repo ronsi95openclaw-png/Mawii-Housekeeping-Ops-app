@@ -15,7 +15,7 @@ declare global {
 export const attachAuth: RequestHandler = async (req, _res, next) => {
   try {
     const auth = getAuth(req);
-    const clerkUserId = auth.userId ?? (process.env.NODE_ENV !== "production" ? (req.header("x-dev-user-id") ?? "dev-user") : undefined);
+    const clerkUserId = auth.userId ?? (process.env.NODE_ENV !== "production" ? req.header("x-dev-user-id") : undefined);
     if (!clerkUserId) {
       next();
       return;
