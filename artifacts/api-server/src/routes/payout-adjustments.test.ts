@@ -142,7 +142,7 @@ describe("payout adjustment and export routes", () => {
           method: "POST",
           headers: { "x-dev-user-id": managerUserId },
           body: { employeeId: workerA.id, amount: "2.25", reason: "Too early" },
-        }), 404);
+        }), 409);
         expectStatus(await request(baseUrl, `/pay-periods/${targetPeriod.id}/approve`, {
           method: "POST",
           headers: { "x-dev-user-id": managerUserId },
@@ -151,6 +151,11 @@ describe("payout adjustment and export routes", () => {
           method: "POST",
           headers: { "x-dev-user-id": managerUserId },
         }), 200);
+        const [unrelatedPayout] = await db.select().from(payoutRecordsTable).where(and(
+          eq(payoutRecordsTable.payPeriodId, unrelatedPeriod.id),
+          eq(payoutRecordsTable.employeeId, unrelatedWorker.id),
+        ));
+        expect(unrelatedPayout).toBeDefined();
 
         const [workerAPayout] = await db.select().from(payoutRecordsTable).where(and(
           eq(payoutRecordsTable.payPeriodId, targetPeriod.id),
@@ -215,17 +220,21 @@ describe("payout adjustment and export routes", () => {
           method: "POST",
           headers: ownerHeaders,
         }), 200);
-        expectStatus(await request(baseUrl, `/pay-periods/${targetPeriod.id}/adjustments`, {
+        expectStatus(await request(baseUrl, `/pay-periods/${unrelatedPeriod.id}/paid`, {
+          method: "POST",
+          headers: ownerHeaders,
+        }), 200);
+        expectStatus(await request(baseUrl, `/pay-periods/${unrelatedPeriod.id}/adjustments`, {
           method: "POST",
           headers: { "x-dev-user-id": managerUserId },
-          body: { employeeId: workerA.id, amount: "3.00", reason: "After paid" },
+          body: { employeeId: unrelatedWorker.id, amount: "3.00", reason: "After paid" },
         }), 409);
-        const payoutAfterPaidAttempt = (await db.select().from(payoutRecordsTable).where(eq(payoutRecordsTable.id, workerAPayout!.id)))[0]!;
-        expect(payoutAfterPaidAttempt).toMatchObject({
-          adjustmentAmount: payoutBeforePaid.adjustmentAmount,
-          adjustmentReason: payoutBeforePaid.adjustmentReason,
-          adjustmentActor: payoutBeforePaid.adjustmentActor,
-          amount: payoutBeforePaid.amount,
+        const unrelatedAfterPaidAttempt = (await db.select().from(payoutRecordsTable).where(eq(payoutRecordsTable.id, unrelatedPayout!.id)))[0]!;
+        expect(unrelatedAfterPaidAttempt).toMatchObject({
+          adjustmentAmount: unrelatedPayout!.adjustmentAmount,
+          adjustmentReason: unrelatedPayout!.adjustmentReason,
+          adjustmentActor: unrelatedPayout!.adjustmentActor,
+          amount: unrelatedPayout!.amount,
         });
 
         const csvResponse = await request(baseUrl, "/payouts?start=2020-03-01T00:00:00.000Z&end=2020-03-01T23:59:59.000Z&format=csv", {
@@ -234,7 +243,7 @@ describe("payout adjustment and export routes", () => {
         expectStatus(csvResponse, 200);
         const csv = (csvResponse.body as { raw: string }).raw;
         expect(csv).toContain("employee_id,employee,approved_minutes,approved_hours,hourly_rate,base_amount,adjustment_amount,adjustment_reason,final_amount");
-        expect(csv).toContain(`"${workerA.id},`);
+        expect(csv).toContain(`${workerA.id},"`);
         expect(csv).toContain("Manager bonus");
         expect(csv).toContain("12.25");
         expect(csv).toContain("Owner correction");
@@ -247,8 +256,8 @@ describe("payout adjustment and export routes", () => {
         if (payPeriodIds.length) await db.delete(payPeriodsTable).where(inArray(payPeriodsTable.id, payPeriodIds));
         if (timeEntryIds.length) await db.delete(timeEntriesTable).where(inArray(timeEntriesTable.id, timeEntryIds));
         if (workerRateIds.length) await db.delete(workerRatesTable).where(inArray(workerRatesTable.id, workerRateIds));
-        if (employeeIds.length) await db.delete(employeesTable).where(inArray(employeesTable.id, employeeIds));
-        void managerId;
+        const allEmployeeIds = [...employeeIds, managerId].filter((id): id is number => id !== undefined);
+        if (allEmployeeIds.length) await db.delete(employeesTable).where(inArray(employeesTable.id, allEmployeeIds));
       }
     },
     30_000,
