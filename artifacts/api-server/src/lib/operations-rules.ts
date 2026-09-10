@@ -37,3 +37,11 @@ export function isValidBreakMinutes(clockIn: Date, clockOut: Date | null | undef
   const workedMinutes = Math.floor((end.getTime() - clockIn.getTime()) / 60_000);
   return breaksMinutes <= workedMinutes;
 }
+
+export function isValidCorrectionMinutes(clockIn: Date, clockOut: Date | null | undefined, breaksMinutes: number, correctionMinutes: number) {
+  if (!clockOut || !isChronologicalTimeEntry(clockIn, clockOut)) return false;
+  if (!Number.isInteger(breaksMinutes) || breaksMinutes < 0) return false;
+  if (!Number.isInteger(correctionMinutes)) return false;
+  const elapsedMinutes = Math.floor((clockOut.getTime() - clockIn.getTime()) / 60_000);
+  return breaksMinutes <= elapsedMinutes && elapsedMinutes - breaksMinutes + correctionMinutes >= 0;
+}
