@@ -57,6 +57,7 @@ router.post("/service-plans/:id/resume", requireRole("owner", "manager"), async 
 router.post("/service-plans/:id/generate", requireRole("owner", "manager"), async (req, res) => {
   const plan = (await db.select().from(servicePlansTable).where(eq(servicePlansTable.id, id(req.params.id))))[0];
   if (!plan) { res.status(404).json({ error: "Service plan not found" }); return; }
+  if (plan.pausedAt) { res.status(409).json({ error: "Service plan is paused" }); return; }
   const dates = generateOccurrences(plan.nextOccurrence, { frequency: plan.frequency as any, intervalWeeks: plan.intervalWeeks ?? undefined }, Number(body(req).count ?? 12));
   const customer = (await db.select().from(customersTable).where(eq(customersTable.id, plan.customerId)))[0];
   const address = (await db.select().from(addressesTable).where(eq(addressesTable.id, plan.addressId)))[0];
