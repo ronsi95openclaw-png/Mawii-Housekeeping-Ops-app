@@ -25,6 +25,42 @@ let seedPromise: Promise<void> | null = null;
 type ChecklistItem = { id: number; label: string; completed: boolean };
 type Photo = { id: number; url: string; label: string; createdAt: string };
 
+const PLACEHOLDER_TEAM = ["Maya Chen", "Jordan Ellis", "Avery Brooks"];
+
+function checklistForService(serviceType: string): ChecklistItem[] {
+  const common = [
+    "Confirm access notes and client requests",
+    "Kitchen surfaces, sink, and appliance exteriors",
+    "Bathrooms cleaned and sanitized",
+    "Dust and wipe reachable surfaces",
+    "Vacuum and mop floors",
+    "Remove trash and reset rooms",
+    "Final walkthrough photos",
+  ];
+  const normalized = serviceType.toLowerCase();
+  const labels = normalized.includes("move")
+    ? [
+        "Empty all cabinets, drawers, and closets",
+        "Clean inside cabinets and drawers",
+        "Clean inside oven and refrigerator",
+        "Kitchen and bathrooms deep cleaned",
+        "Baseboards, doors, trim, and fixtures",
+        "Vacuum and mop all floors",
+        "Remove all trash and debris",
+        "Final walkthrough photos",
+      ]
+    : normalized.includes("deep")
+      ? [
+          ...common.slice(0, -1),
+          "Detail baseboards, doors, and trim",
+          "Clean buildup around fixtures and appliances",
+          "Complete selected add-ons",
+          "Final walkthrough photos",
+        ]
+      : [...common.slice(0, -1), "Complete selected add-ons", "Final walkthrough photos"];
+  return labels.map((label, index) => ({ id: index + 1, label, completed: false }));
+}
+
 function initials(name: string) {
   return name
     .split(" ")
@@ -54,29 +90,60 @@ function mapMember(member: TeamMember) {
 async function ensureSeedData() {
   if (seedPromise) return seedPromise;
   seedPromise = (async () => {
+    const existingMembers = await db.select().from(teamMembersTable).orderBy(asc(teamMembersTable.id));
+    const placeholderMembers = existingMembers.filter((member) => PLACEHOLDER_TEAM.includes(member.name));
+    if (placeholderMembers.length) {
+      for (const maya of placeholderMembers.filter((member) => member.name === "Maya Chen")) {
+        await db.update(teamMembersTable).set({
+          name: "Danna Donjuan",
+          role: "Owner",
+          phone: "+1 (214) 650-4326",
+          status: "available",
+          initials: "DD",
+        }).where(eq(teamMembersTable.id, maya.id));
+      }
+      for (const jordan of placeholderMembers.filter((member) => member.name === "Jordan Ellis")) {
+        await db.update(teamMembersTable).set({
+          name: "Ronnie Irizarry",
+          role: "Owner",
+          phone: "(972) 854-2542",
+          status: "available",
+          initials: "RI",
+        }).where(eq(teamMembersTable.id, jordan.id));
+      }
+      for (const member of placeholderMembers.filter((item) => item.name === "Avery Brooks")) {
+        await db.delete(teamMembersTable).where(eq(teamMembersTable.id, member.id));
+      }
+    }
+
+    const oldServices = [
+      { from: "Deep clean", to: "Deep cleaning" },
+      { from: "Move-out clean", to: "Move In/Out cleaning" },
+      { from: "Maintenance clean", to: "Standard cleaning" },
+    ];
+    for (const service of oldServices) {
+      await db.update(jobsTable).set({
+        serviceType: service.to,
+        checklist: checklistForService(service.to),
+      }).where(eq(jobsTable.serviceType, service.from));
+    }
+
     const members = await db.select().from(teamMembersTable).limit(1);
     if (members.length === 0) {
       await db.insert(teamMembersTable).values([
         {
-          name: "Maya Chen",
-          role: "Co-owner",
-          phone: "(312) 555-0148",
-          status: "assigned",
-          initials: "MC",
-        },
-        {
-          name: "Jordan Ellis",
-          role: "Cleaning specialist",
-          phone: "(312) 555-0192",
-          status: "assigned",
-          initials: "JE",
-        },
-        {
-          name: "Avery Brooks",
-          role: "Cleaning specialist",
-          phone: "(312) 555-0166",
+          name: "Danna Donjuan",
+          role: "Owner",
+          phone: "+1 (214) 650-4326",
           status: "available",
-          initials: "AB",
+          initials: "DD",
+        },
+        {
+          name: "Ronnie Irizarry",
+          role: "Owner",
+          phone: "(972) 854-2542",
+          status: "available",
+          initials: "RI",
         },
       ]);
     }
@@ -87,12 +154,6 @@ async function ensureSeedData() {
         .select()
         .from(teamMembersTable)
         .orderBy(asc(teamMembersTable.id));
-      const checklist = (labels: string[]): ChecklistItem[] =>
-        labels.map((label, index) => ({
-          id: index + 1,
-          label,
-          completed: index === 0,
-        }));
       await db.insert(jobsTable).values([
       {
         clientName: "The Ramirez family",
@@ -101,17 +162,11 @@ async function ensureSeedData() {
         startTime: "09:00",
         endTime: "11:30",
         status: "in_progress",
-        serviceType: "Deep clean",
+        serviceType: "Deep cleaning",
         notes: "Please prioritize the kitchen and main floor windows.",
         clientPhone: "(312) 555-0124",
         teamMemberIds: seededMembers.slice(0, 2).map((member) => member.id),
-        checklist: checklist([
-          "Kitchen surfaces and appliances",
-          "Bathrooms sanitized",
-          "Floors vacuumed and mopped",
-          "Living areas reset",
-          "Final walkthrough photos",
-        ]),
+        checklist: checklistForService("Deep cleaning"),
         photos: [],
       },
       {
@@ -121,17 +176,11 @@ async function ensureSeedData() {
         startTime: "08:30",
         endTime: "12:00",
         status: "scheduled",
-        serviceType: "Move-out clean",
+        serviceType: "Move In/Out cleaning",
         notes: "Lockbox code is in the client thread.",
         clientPhone: "(312) 555-0188",
         teamMemberIds: seededMembers.slice(1, 3).map((member) => member.id),
-        checklist: checklist([
-          "Kitchen and cabinets",
-          "Bathrooms sanitized",
-          "Bedrooms and closets",
-          "Baseboards and trim",
-          "Final walkthrough photos",
-        ]),
+        checklist: checklistForService("Move In/Out cleaning"),
         photos: [],
       },
       {
@@ -141,16 +190,11 @@ async function ensureSeedData() {
         startTime: "13:00",
         endTime: "15:00",
         status: "attention",
-        serviceType: "Maintenance clean",
+        serviceType: "Standard cleaning",
         notes: "Client requested a text when the team is 20 minutes away.",
         clientPhone: "(312) 555-0116",
         teamMemberIds: [seededMembers[2]?.id ?? 3],
-        checklist: checklist([
-          "Kitchen surfaces",
-          "Bathrooms refreshed",
-          "Floors completed",
-          "Supplies restocked",
-        ]),
+        checklist: checklistForService("Standard cleaning"),
         photos: [],
       },
       ]);
@@ -286,12 +330,7 @@ router.post("/jobs", async (req, res) => {
       scheduledDate: parsed.data.scheduledDate.toISOString().slice(0, 10),
       status: "scheduled",
       teamMemberIds: parsed.data.teamMemberIds ?? [],
-      checklist: [
-        { id: 1, label: "Kitchen surfaces and appliances", completed: false },
-        { id: 2, label: "Bathrooms sanitized", completed: false },
-        { id: 3, label: "Floors completed", completed: false },
-        { id: 4, label: "Final walkthrough photos", completed: false },
-      ],
+      checklist: checklistForService(parsed.data.serviceType),
       photos: [],
     })
     .returning();
