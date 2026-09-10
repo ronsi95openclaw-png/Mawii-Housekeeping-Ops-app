@@ -1406,7 +1406,36 @@ export const GetOwnerReportQueryParams = zod.object({
 })
 
 export const GetOwnerReportResponse = zod.object({
-
-}).passthrough()
+  "dateRange": zod.object({
+  "start": zod.coerce.date().optional(),
+  "end": zod.coerce.date().optional()
+}),
+  "jobs": zod.object({
+  "volume": zod.number().int().optional(),
+  "completed": zod.number().int().optional(),
+  "completedThisWeek": zod.number().int().optional()
+}),
+  "employees": zod.array(zod.object({
+  "id": zod.number().int().optional(),
+  "name": zod.string().optional(),
+  "role": zod.string().optional(),
+  "approvedMinutes": zod.number().int().optional(),
+  "approvedHours": zod.number().optional(),
+  "amount": zod.number().optional()
+})),
+  "payouts": zod.object({
+  "approvedMinutes": zod.number().int(),
+  "approvedHours": zod.number(),
+  "baseAmount": zod.number(),
+  "adjustmentAmount": zod.number(),
+  "finalAmount": zod.number(),
+  "amount": zod.number()
+}),
+  "recurringServices": zod.number().int(),
+  "activeRecurringServices": zod.number().int(),
+  "pausedRecurringServices": zod.number().int(),
+  "incidents": zod.record(zod.string(), zod.number().int()),
+  "customerHistoryCount": zod.number().int()
+})
 
 

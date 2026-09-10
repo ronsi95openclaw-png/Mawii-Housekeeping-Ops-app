@@ -9,4 +9,5 @@
 export type OwnerReportJobs = {
   volume?: number;
   completed?: number;
+  completedThisWeek?: number;
 };

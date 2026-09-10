@@ -9,12 +9,16 @@ import type { OwnerReportDateRange } from './ownerReportDateRange';
 import type { OwnerReportEmployeesItem } from './ownerReportEmployeesItem';
 import type { OwnerReportIncidents } from './ownerReportIncidents';
 import type { OwnerReportJobs } from './ownerReportJobs';
+import type { OwnerReportPayouts } from './ownerReportPayouts';
 
 export interface OwnerReport {
   dateRange: OwnerReportDateRange;
   jobs: OwnerReportJobs;
   employees: OwnerReportEmployeesItem[];
+  payouts: OwnerReportPayouts;
   recurringServices: number;
+  activeRecurringServices: number;
+  pausedRecurringServices: number;
   incidents: OwnerReportIncidents;
   customerHistoryCount: number;
 }

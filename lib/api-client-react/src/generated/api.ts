@@ -39,7 +39,6 @@ import type {
   EmployeeUpdate,
   GenerateOccurrencesInput,
   GetActiveTimeEntriesParams,
-  GetOwnerReport200,
   GetOwnerReportParams,
   HealthStatus,
   Incident,
@@ -61,6 +60,7 @@ import type {
   MessageInput,
   MessageRecord,
   OccurrenceUpdate,
+  OwnerReport,
   PayPeriod,
   PayPeriodInput,
   Payout,
@@ -4166,9 +4166,9 @@ export const getGetOwnerReportUrl = (params: GetOwnerReportParams,) => {
   return stringifiedParams.length > 0 ? `/api/reports/owner?${stringifiedParams}` : `/api/reports/owner`
 }
 
-export const getOwnerReport = async (params: GetOwnerReportParams, options?: Parameters<typeof customFetch>[1]): Promise<GetOwnerReport200> => {
+export const getOwnerReport = async (params: GetOwnerReportParams, options?: Parameters<typeof customFetch>[1]): Promise<OwnerReport> => {
 
-  return customFetch<GetOwnerReport200>(getGetOwnerReportUrl(params),
+  return customFetch<OwnerReport>(getGetOwnerReportUrl(params),
   {
     ...options,
     method: 'GET'

@@ -6,4 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type OwnerReportEmployeesItem = { [key: string]: unknown };
+export type OwnerReportEmployeesItem = {
+  id?: number;
+  name?: string;
+  role?: string;
+  approvedMinutes?: number;
+  approvedHours?: number;
+  amount?: number;
+};

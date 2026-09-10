@@ -796,9 +796,26 @@ export type OwnerReportDateRange = {
 export type OwnerReportJobs = {
   volume?: number;
   completed?: number;
+  completedThisWeek?: number;
 };
 
-export type OwnerReportEmployeesItem = { [key: string]: unknown };
+export type OwnerReportEmployeesItem = {
+  id?: number;
+  name?: string;
+  role?: string;
+  approvedMinutes?: number;
+  approvedHours?: number;
+  amount?: number;
+};
+
+export type OwnerReportPayouts = {
+  approvedMinutes: number;
+  approvedHours: number;
+  baseAmount: number;
+  adjustmentAmount: number;
+  finalAmount: number;
+  amount: number;
+};
 
 export type OwnerReportIncidents = {[key: string]: number};
 
@@ -806,7 +823,10 @@ export interface OwnerReport {
   dateRange: OwnerReportDateRange;
   jobs: OwnerReportJobs;
   employees: OwnerReportEmployeesItem[];
+  payouts: OwnerReportPayouts;
   recurringServices: number;
+  activeRecurringServices: number;
+  pausedRecurringServices: number;
   incidents: OwnerReportIncidents;
   customerHistoryCount: number;
 }
@@ -859,6 +879,4 @@ export type GetOwnerReportParams = {
 start: string;
 end: string;
 };
-
-export type GetOwnerReport200 = { [key: string]: unknown };
 

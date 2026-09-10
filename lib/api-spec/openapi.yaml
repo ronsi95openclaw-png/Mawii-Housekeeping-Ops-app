@@ -569,7 +569,7 @@ paths:
       parameters:
         - { name: start, in: query, required: true, schema: { type: string, format: date } }
         - { name: end, in: query, required: true, schema: { type: string, format: date } }
-      responses: { "200": { description: Owner report, content: { application/json: { schema: { type: object } } } } }
+      responses: { "200": { description: Owner report, content: { application/json: { schema: { $ref: "#/components/schemas/OwnerReport" } } } } }
 components:
   parameters:
     Id:
@@ -1311,7 +1311,7 @@ components:
         createdAt: { type: string, format: date-time }
     OwnerReport:
       type: object
-      required: [dateRange, jobs, employees, recurringServices, incidents, customerHistoryCount]
+      required: [dateRange, jobs, employees, payouts, recurringServices, activeRecurringServices, pausedRecurringServices, incidents, customerHistoryCount]
       properties:
         dateRange:
           type: object
@@ -1323,10 +1323,31 @@ components:
           properties:
             volume: { type: integer }
             completed: { type: integer }
+            completedThisWeek: { type: integer }
         employees:
           type: array
-          items: { type: object }
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              role: { type: string }
+              approvedMinutes: { type: integer }
+              approvedHours: { type: number }
+              amount: { type: number }
+        payouts:
+          type: object
+          required: [approvedMinutes, approvedHours, baseAmount, adjustmentAmount, finalAmount, amount]
+          properties:
+            approvedMinutes: { type: integer }
+            approvedHours: { type: number }
+            baseAmount: { type: number }
+            adjustmentAmount: { type: number }
+            finalAmount: { type: number }
+            amount: { type: number }
         recurringServices: { type: integer }
+        activeRecurringServices: { type: integer }
+        pausedRecurringServices: { type: integer }
         incidents:
           type: object
           additionalProperties: { type: integer }

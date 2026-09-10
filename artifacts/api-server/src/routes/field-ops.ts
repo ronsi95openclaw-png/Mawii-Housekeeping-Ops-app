@@ -13,6 +13,25 @@ const router: IRouter = Router();
 router.use(requireAuth);
 const id = (value: string | string[]) => Number.parseInt(Array.isArray(value) ? value[0]! : value, 10);
 const body = (req: any) => req.body ?? {};
+function chicagoBoundary(date: string, endOfDay: boolean) {
+  const [year, month, day] = date.split("-").map(Number);
+  const rough = new Date(Date.UTC(year!, month! - 1, day!, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0));
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(rough);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  const localAsUtc = Date.UTC(value("year"), value("month") - 1, value("day"), value("hour"), value("minute"), value("second"));
+  const boundary = new Date(rough.getTime() - (localAsUtc - rough.getTime()));
+  if (endOfDay) boundary.setUTCMilliseconds(999);
+  return boundary;
+}
 const event = async (type: string, title: string, detail?: string, jobId?: number) => {
   await db.insert(activityEventsTable).values({ type, title, detail, jobId });
 };
@@ -206,19 +225,23 @@ router.get("/reports/owner", requireRole("owner", "manager"), async (req, res) =
   const start = String(req.query.start);
   const end = String(req.query.end);
   if (!start || !end) { res.status(400).json({ error: "start and end are required" }); return; }
+  const reportStart = chicagoBoundary(start, false);
+  const reportEnd = chicagoBoundary(end, true);
   const jobs = await db.select().from(jobsTable).where(and(gte(jobsTable.scheduledDate, start), lte(jobsTable.scheduledDate, end)));
-  const incidents = await db.select().from(incidentsTable).where(and(gte(incidentsTable.createdAt, new Date(`${start}T00:00:00Z`)), lte(incidentsTable.createdAt, new Date(`${end}T23:59:59Z`))));
+  const incidents = await db.select().from(incidentsTable).where(and(gte(incidentsTable.createdAt, reportStart), lte(incidentsTable.createdAt, reportEnd)));
   const plans = await db.select().from(servicePlansTable);
   const employees = await db.select().from(employeesTable);
-  const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, new Date(`${start}T00:00:00Z`)), lte(timeEntriesTable.clockIn, new Date(`${end}T23:59:59Z`)), eq(timeEntriesTable.correctionStatus, "approved")));
+  const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, reportStart), lte(timeEntriesTable.clockIn, reportEnd), eq(timeEntriesTable.correctionStatus, "approved")));
   const rates = await db.select().from(workerRatesTable);
-  const labor = new Map<number, { approvedMinutes: number; amount: number }>();
+  const periods = await db.select().from(payPeriodsTable);
+  const payoutRecords = await db.select().from(payoutRecordsTable);
+  const labor = new Map<number, { approvedMinutes: number; baseCents: number }>();
   for (const entry of entries) {
     const minutes = entry.clockOut ? calculateWorkedMinutes(entry) : 0;
     const rate = rates.find(item => item.employeeId === entry.employeeId);
-    const current = labor.get(entry.employeeId) ?? { approvedMinutes: 0, amount: 0 };
+    const current = labor.get(entry.employeeId) ?? { approvedMinutes: 0, baseCents: 0 };
     current.approvedMinutes += minutes;
-    current.amount += rate ? minutes / 60 * Number(rate.hourlyRate) : 0;
+    current.baseCents += rate ? calculatePayoutCents(minutes, Number(rate.hourlyRate)) : 0;
     labor.set(entry.employeeId, current);
   }
   const incidentSummary = incidents.reduce((out, item) => {
@@ -226,12 +249,25 @@ router.get("/reports/owner", requireRole("owner", "manager"), async (req, res) =
     out[key] = (out[key] ?? 0) + 1;
     return out;
   }, {} as Record<string, number>);
+  const completedThisWeek = jobs.filter(j => j.status === "completed" && j.completedAt && j.completedAt >= reportStart && j.completedAt <= reportEnd).length;
+  const payoutTotals = [...labor.entries()].reduce((out, [employeeId, item]) => {
+    const period = periods.find(candidate => candidate.startsOn <= end && candidate.endsOn >= start);
+    const record = period ? payoutRecords.find(candidate => candidate.payPeriodId === period.id && candidate.employeeId === employeeId) : undefined;
+    const adjustmentCents = record ? (parsePayoutAmountCents(record.adjustmentAmount) ?? 0) : 0;
+    out.approvedMinutes += item.approvedMinutes;
+    out.baseCents += item.baseCents;
+    out.adjustmentCents += adjustmentCents;
+    out.finalCents += item.baseCents + adjustmentCents;
+    return out;
+  }, { approvedMinutes: 0, baseCents: 0, adjustmentCents: 0, finalCents: 0 });
   res.json({
     dateRange: { start, end },
-    jobs: { volume: jobs.length, completed: jobs.filter(j => j.status === "completed").length },
-    employees: employees.map(employee => ({ ...employee, ...(labor.get(employee.id) ?? { approvedMinutes: 0, amount: 0 }) })),
-    payouts: { approvedMinutes: [...labor.values()].reduce((sum, item) => sum + item.approvedMinutes, 0), amount: [...labor.values()].reduce((sum, item) => sum + item.amount, 0) },
-    recurringServices: plans.filter(p => !p.pausedAt).length,
+    jobs: { volume: jobs.length, completed: completedThisWeek, completedThisWeek },
+    employees: employees.filter(employee => labor.has(employee.id)).map(employee => ({ ...employee, approvedMinutes: labor.get(employee.id)!.approvedMinutes, approvedHours: labor.get(employee.id)!.approvedMinutes / 60, amount: labor.get(employee.id)!.baseCents / 100 })),
+    payouts: { approvedMinutes: payoutTotals.approvedMinutes, approvedHours: payoutTotals.approvedMinutes / 60, baseAmount: payoutTotals.baseCents / 100, adjustmentAmount: payoutTotals.adjustmentCents / 100, finalAmount: payoutTotals.finalCents / 100, amount: payoutTotals.finalCents / 100 },
+    recurringServices: plans.filter(p => p.nextOccurrence >= start && p.nextOccurrence <= end && !p.pausedAt).length,
+    activeRecurringServices: plans.filter(p => p.nextOccurrence >= start && p.nextOccurrence <= end && !p.pausedAt).length,
+    pausedRecurringServices: plans.filter(p => p.nextOccurrence >= start && p.nextOccurrence <= end && Boolean(p.pausedAt)).length,
     incidents: incidentSummary,
     customerHistoryCount: new Set(jobs.map(j => j.clientName)).size,
   });
