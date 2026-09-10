@@ -173,11 +173,21 @@ function uniqueJobs(jobs: Job[]) {
   });
 }
 
+function uniqueMembers(members: TeamMember[]) {
+  const seen = new Set<string>();
+  return members.filter((member) => {
+    const key = `${member.name}|${member.phone}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function mapJob(job: Job) {
-  const allMembers = await db
+  const allMembers = uniqueMembers(await db
     .select()
     .from(teamMembersTable)
-    .orderBy(asc(teamMembersTable.id));
+    .orderBy(asc(teamMembersTable.id)));
   return {
     id: job.id,
     clientName: job.clientName,
@@ -365,7 +375,7 @@ router.post("/jobs/:id/messages", async (req, res) => {
 
 router.get("/team", async (_req, res) => {
   await ensureSeedData();
-  const members = await db.select().from(teamMembersTable).orderBy(asc(teamMembersTable.name));
+  const members = uniqueMembers(await db.select().from(teamMembersTable).orderBy(asc(teamMembersTable.name)));
   res.json(members.map(mapMember));
 });
 
