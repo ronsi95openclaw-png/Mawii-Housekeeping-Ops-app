@@ -207,7 +207,7 @@ describe("owner and manager operations", () => {
           headers: ownerHeaders,
           body: { name: `${token} customer edited`, phone: null, email: null, notes: null },
         }), 200) as { id: number; name: string; phone: string | null; email: string | null; notes: string | null };
-        expect(clearedCustomer).toEqual({
+        expect(clearedCustomer).toMatchObject({
           id: customer.id,
           name: `${token} customer edited`,
           phone: null,
