@@ -6,6 +6,7 @@ import { payoutCsv, summarizeApprovedPayouts } from "./payouts";
 import { normalizeMessageIntent } from "./messages";
 import { hasRole } from "./authorization";
 import { canCompleteJob, canTransitionIncident, canTransitionPayPeriod, isChronologicalTimeEntry } from "./operations-rules";
+import { requireAuth, requireRole } from "../middlewares/auth";
 
 describe("field operations services", () => {
   it("generates weekly and monthly occurrences", () => {
@@ -58,5 +59,34 @@ describe("field operations services", () => {
     expect(canTransitionPayPeriod("draft", "paid")).toBe(false);
     expect(isChronologicalTimeEntry(new Date("2026-01-01T09:00Z"), new Date("2026-01-01T10:00Z"))).toBe(true);
     expect(isChronologicalTimeEntry(new Date("2026-01-01T10:00Z"), new Date("2026-01-01T09:00Z"))).toBe(false);
+  });
+  it("enforces authentication and role middleware at the HTTP boundary", () => {
+    const response = () => {
+      const result = { statusCode: 200, body: undefined as unknown };
+      return {
+        result,
+        status(code: number) {
+          result.statusCode = code;
+          return this;
+        },
+        json(body: unknown) {
+          result.body = body;
+          return this;
+        },
+      };
+    };
+    const next = () => undefined;
+
+    const unauthenticated = response();
+    requireAuth({} as never, unauthenticated as never, next);
+    expect(unauthenticated.result).toMatchObject({ statusCode: 401, body: { error: "Authentication required" } });
+
+    const cleaner = response();
+    requireRole("owner", "manager")({ authContext: { clerkUserId: "cleaner", role: "cleaner" } } as never, cleaner as never, next);
+    expect(cleaner.result).toMatchObject({ statusCode: 403, body: { error: "Insufficient role" } });
+
+    const manager = response();
+    requireRole("owner", "manager")({ authContext: { clerkUserId: "manager", role: "manager" } } as never, manager as never, next);
+    expect(manager.result.statusCode).toBe(200);
   });
 });
