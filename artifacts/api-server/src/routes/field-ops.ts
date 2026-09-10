@@ -67,10 +67,31 @@ router.patch("/customers/:id", requireRole("owner", "manager"), async (req, res)
 });
 router.get("/customers/:id/addresses", requireRole("owner", "manager"), async (req, res) => res.json(await db.select().from(addressesTable).where(eq(addressesTable.customerId, id(req.params.id)))));
 router.post("/customers/:id/addresses", requireRole("owner", "manager"), async (req, res) => {
+  const customerId = id(req.params.id);
+  const [customer] = await db.select({ id: customersTable.id }).from(customersTable).where(eq(customersTable.id, customerId));
+  if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
   const input = body(req);
   if (!input.line1 || !input.city || !input.state || !input.postalCode) { res.status(400).json({ error: "address fields are required" }); return; }
-  const [address] = await db.insert(addressesTable).values({ customerId: id(req.params.id), ...input }).returning();
+  const [address] = await db.insert(addressesTable).values({ customerId, ...input }).returning();
   res.status(201).json(address);
+});
+router.patch("/customers/:customerId/addresses/:id", requireRole("owner", "manager"), async (req, res) => {
+  const customerId = id(req.params.customerId);
+  const addressId = id(req.params.id);
+  const [existing] = await db.select().from(addressesTable).where(and(eq(addressesTable.id, addressId), eq(addressesTable.customerId, customerId)));
+  if (!existing) { res.status(404).json({ error: "Address not found" }); return; }
+  const input = body(req);
+  const requiredFields = ["line1", "city", "state", "postalCode"] as const;
+  if (requiredFields.some((field) => Object.hasOwn(input, field) && (typeof input[field] !== "string" || !input[field].trim()))) {
+    res.status(400).json({ error: "address fields must be nonblank" });
+    return;
+  }
+  const updates: Record<string, unknown> = {};
+  for (const field of ["label", "line1", "line2", "city", "state", "postalCode", "accessNotes"]) {
+    if (Object.hasOwn(input, field)) updates[field] = input[field];
+  }
+  const [address] = await db.update(addressesTable).set(updates).where(eq(addressesTable.id, addressId)).returning();
+  res.json(address);
 });
 
 router.get("/service-plans", requireRole("owner", "manager"), async (_req, res) => res.json(await db.select().from(servicePlansTable)));

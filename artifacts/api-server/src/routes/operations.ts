@@ -386,6 +386,19 @@ router.post("/jobs", requireRole("owner", "manager"), async (req, res) => {
     return;
   }
   const { employeeIds, ...jobInput } = parsed.data;
+  if (employeeIds?.length) {
+    const employees = await db
+      .select({ id: employeesTable.id, active: employeesTable.active, role: employeesTable.role })
+      .from(employeesTable)
+      .where(inArray(employeesTable.id, employeeIds));
+    if (
+      employees.length !== new Set(employeeIds).size ||
+      employees.some((employee) => employee.active !== "true" || employee.role !== "cleaner")
+    ) {
+      res.status(422).json({ error: "Only active cleaner employees can be assigned" });
+      return;
+    }
+  }
   const [job] = await db
     .insert(jobsTable)
     .values({
@@ -480,6 +493,10 @@ router.post("/jobs/:jobId/assignments", requireRole("owner", "manager"), async (
   const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, employeeId));
   if (!job || !employee || employee.active !== "true") {
     res.status(404).json({ error: "Job or active employee not found" });
+    return;
+  }
+  if (employee.role !== "cleaner") {
+    res.status(422).json({ error: "Only cleaner employees can be assigned to jobs" });
     return;
   }
   const existing = (await db.select().from(jobAssignmentsTable).where(and(eq(jobAssignmentsTable.jobId, jobId), eq(jobAssignmentsTable.employeeId, employeeId))))[0];
