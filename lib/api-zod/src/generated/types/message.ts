@@ -5,6 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { MessageAudience } from './messageAudience';
+import type { MessageChannel } from './messageChannel';
+import type { MessageMetadata } from './messageMetadata';
 import type { MessageRecipient } from './messageRecipient';
 import type { MessageStatus } from './messageStatus';
 
@@ -12,6 +15,25 @@ export interface Message {
   id: number;
   recipient: MessageRecipient;
   body: string;
+  channel: MessageChannel;
+  audience: MessageAudience;
+  /** @nullable */
+  recipientPhone?: string | null;
+  /** @nullable */
+  recipientName?: string | null;
+  /** @nullable */
+  providerMessageId?: string | null;
   status: MessageStatus;
   createdAt: Date;
+  /** @nullable */
+  sentAt?: Date | null;
+  /** @nullable */
+  deliveredAt?: Date | null;
+  /** @nullable */
+  failedAt?: Date | null;
+  /** @nullable */
+  failureReason?: string | null;
+  metadata?: MessageMetadata;
+  /** @nullable */
+  actorClerkUserId?: string | null;
 }

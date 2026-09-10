@@ -18,6 +18,8 @@ tags:
     description: Team members
   - name: activity
     description: Recent operations activity
+  - name: storage
+    description: Protected object storage uploads
 paths:
   /healthz:
     get:
@@ -211,6 +213,225 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TeamMember"
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a protected direct-to-storage upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadInput"
+      responses:
+        "201":
+          description: Upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrl"
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [field-ops]
+      responses:
+        "200": { description: Customers, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Customer" } } } } }
+    post:
+      operationId: createCustomer
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CustomerInput" } } } }
+      responses: { "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } } }
+  /customers/{id}/addresses:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      operationId: listCustomerAddresses
+      tags: [field-ops]
+      responses: { "200": { description: Addresses, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Address" } } } } } }
+    post:
+      operationId: createCustomerAddress
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AddressInput" } } } }
+      responses: { "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Address" } } } } }
+  /service-plans:
+    get:
+      operationId: listServicePlans
+      tags: [field-ops]
+      responses: { "200": { description: Plans, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ServicePlan" } } } } } }
+    post:
+      operationId: createServicePlan
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ServicePlanInput" } } } }
+      responses: { "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/ServicePlan" } } } } }
+  /service-plans/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      operationId: updateServicePlan
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ServicePlanUpdate" } } } }
+      responses: { "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/ServicePlan" } } } } }
+  /service-plans/{id}/pause:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      operationId: pauseServicePlan
+      tags: [field-ops]
+      responses: { "200": { description: Paused, content: { application/json: { schema: { $ref: "#/components/schemas/ServicePlan" } } } } }
+  /service-plans/{id}/resume:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      operationId: resumeServicePlan
+      tags: [field-ops]
+      responses: { "200": { description: Resumed, content: { application/json: { schema: { $ref: "#/components/schemas/ServicePlan" } } } } }
+  /service-plans/{id}/generate:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      operationId: generateServiceOccurrences
+      tags: [field-ops]
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/GenerateOccurrencesInput" } } } }
+      responses: { "201": { description: Occurrences, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ServiceOccurrence" } } } } } }
+  /service-plans/{id}/occurrences:
+    get:
+      operationId: listServicePlanOccurrences
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses: { "200": { description: Occurrences, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ServiceOccurrence" } } } } } }
+  /occurrences/{id}/skip:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      operationId: skipOccurrence
+      tags: [field-ops]
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/SkipOccurrenceInput" } } } }
+      responses: { "200": { description: Skipped, content: { application/json: { schema: { $ref: "#/components/schemas/ServiceOccurrence" } } } } }
+  /occurrences/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      operationId: updateOccurrence
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/OccurrenceUpdate" } } } }
+      responses: { "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/ServiceOccurrence" } } } } }
+  /employees/me:
+    get:
+      operationId: getEmployeeMe
+      tags: [field-ops]
+      responses: { "200": { description: Employee, content: { application/json: { schema: { $ref: "#/components/schemas/Employee" } } } } }
+  /employees:
+    get:
+      operationId: listEmployees
+      tags: [field-ops]
+      responses: { "200": { description: Employees, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Employee" } } } } } }
+  /jobs/assigned:
+    get:
+      operationId: listAssignedJobs
+      tags: [field-ops]
+      responses: { "200": { description: Assignments, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/JobAssignment" } } } } } }
+  /assignments/{id}/{decision}:
+    post:
+      operationId: respondToAssignment
+      tags: [field-ops]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - { name: decision, in: path, required: true, schema: { type: string, enum: [accept, decline] } }
+      responses: { "200": { description: Assignment, content: { application/json: { schema: { $ref: "#/components/schemas/JobAssignment" } } } } }
+  /jobs/{jobId}/time/clock-in:
+    post:
+      operationId: clockInToJob
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/JobId" }]
+      responses: { "201": { description: Time entry, content: { application/json: { schema: { $ref: "#/components/schemas/TimeEntry" } } } } }
+  /time-entries/{id}/clock-out:
+    post:
+      operationId: clockOutTimeEntry
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses: { "200": { description: Time entry, content: { application/json: { schema: { $ref: "#/components/schemas/TimeEntry" } } } } }
+  /time-entries/{id}/break:
+    post:
+      operationId: addTimeBreak
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/BreakInput" } } } }
+      responses: { "200": { description: Time entry, content: { application/json: { schema: { $ref: "#/components/schemas/TimeEntry" } } } } }
+  /time-entries/{id}/correction:
+    post:
+      operationId: requestTimeCorrection
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TimeCorrectionInput" } } } }
+      responses: { "200": { description: Time entry, content: { application/json: { schema: { $ref: "#/components/schemas/TimeEntry" } } } } }
+  /time-entries/{id}/approve:
+    post:
+      operationId: approveTimeCorrection
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses: { "200": { description: Time entry, content: { application/json: { schema: { $ref: "#/components/schemas/TimeEntry" } } } } }
+  /time-entries/active:
+    get:
+      operationId: getActiveTimeEntries
+      tags: [field-ops]
+      parameters: [{ name: jobId, in: query, schema: { type: integer } }]
+      responses: { "200": { description: Active entries, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/TimeEntry" } } } } } }
+  /time-entries:
+    get:
+      operationId: listTimeEntries
+      tags: [field-ops]
+      parameters: [{ name: status, in: query, schema: { type: string, enum: [pending] } }]
+      responses: { "200": { description: Time entries, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/TimeEntry" } } } } } }
+  /jobs/{jobId}/photos:
+    parameters: [{ $ref: "#/components/parameters/JobId" }]
+    get:
+      operationId: listProofPhotos
+      tags: [field-ops]
+      responses: { "200": { description: Photos, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProofPhoto" } } } } } }
+    post:
+      operationId: registerProofPhoto
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ProofPhotoInput" } } } }
+      responses: { "201": { description: Photo, content: { application/json: { schema: { $ref: "#/components/schemas/ProofPhoto" } } } } }
+  /jobs/{jobId}/incidents:
+    post:
+      operationId: createIncident
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/JobId" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/IncidentInput" } } } }
+      responses: { "201": { description: Incident, content: { application/json: { schema: { $ref: "#/components/schemas/Incident" } } } } }
+  /incidents/{id}:
+    patch:
+      operationId: reviewIncident
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/IncidentUpdate" } } } }
+      responses: { "200": { description: Incident, content: { application/json: { schema: { $ref: "#/components/schemas/Incident" } } } } }
+  /incidents:
+    get:
+      operationId: listIncidents
+      tags: [field-ops]
+      parameters: [{ name: status, in: query, schema: { type: string } }]
+      responses: { "200": { description: Incidents, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Incident" } } } } } }
+  /worker-rates:
+    post:
+      operationId: createWorkerRate
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/WorkerRateInput" } } } }
+      responses: { "201": { description: Rate, content: { application/json: { schema: { $ref: "#/components/schemas/WorkerRate" } } } } }
+  /payouts:
+    get:
+      operationId: listPayouts
+      tags: [field-ops]
+      parameters:
+        - { name: start, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: end, in: query, required: true, schema: { type: string, format: date-time } }
+      responses: { "200": { description: Payouts, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Payout" } } } } } }
+  /activity/history:
+    get:
+      operationId: listActivityHistory
+      tags: [activity]
+      responses: { "200": { description: Activity, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ActivityEvent" } } } } } }
+  /jobs/{jobId}/messages:
+    get:
+      operationId: listJobMessages
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/JobId" }]
+      responses: { "200": { description: Messages, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MessageRecord" } } } } } }
 components:
   parameters:
     Id:
@@ -219,6 +440,11 @@ components:
       required: true
       schema:
         type: integer
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: integer }
   schemas:
     HealthStatus:
       type: object
@@ -449,9 +675,23 @@ components:
         body:
           type: string
           minLength: 1
+        channel:
+          type: string
+          enum: [sms, whatsapp]
+          default: sms
+        audience:
+          type: string
+          enum: [customer, employee]
+          default: customer
+        recipientPhone:
+          type: string
+        recipientName:
+          type: string
+        metadata:
+          type: object
     Message:
       type: object
-      required: [id, recipient, body, status, createdAt]
+      required: [id, recipient, body, channel, audience, status, createdAt]
       properties:
         id:
           type: integer
@@ -460,10 +700,276 @@ components:
           enum: [client, team]
         body:
           type: string
+        channel:
+          type: string
+          enum: [sms, whatsapp]
+        audience:
+          type: string
+          enum: [customer, employee]
+        recipientPhone:
+          type: ["string", "null"]
+        recipientName:
+          type: ["string", "null"]
+        providerMessageId:
+          type: ["string", "null"]
         status:
           type: string
           enum: [queued, sent, failed]
         createdAt:
           type: string
           format: date-time
+        sentAt:
+          type: ["string", "null"]
+          format: date-time
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+        failedAt:
+          type: ["string", "null"]
+          format: date-time
+        failureReason:
+          type: ["string", "null"]
+        metadata:
+          type: object
+        actorClerkUserId:
+          type: ["string", "null"]
+    UploadInput:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1 }
+        size: { type: integer, minimum: 1 }
+        contentType: { type: string, minLength: 1 }
+    UploadUrl:
+      type: object
+      required: [uploadURL, objectPath, metadata]
+      properties:
+        uploadURL: { type: string, format: uri }
+        objectPath: { type: string }
+        metadata:
+          type: object
+          required: [name, size, contentType]
+          properties:
+            name: { type: string }
+            size: { type: integer }
+            contentType: { type: string }
+    Customer:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        phone: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+    CustomerInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        notes: { type: string }
+    Address:
+      type: object
+      required: [id, customerId, line1, city, state, postalCode]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        label: { type: string }
+        line1: { type: string }
+        line2: { type: ["string", "null"] }
+        city: { type: string }
+        state: { type: string }
+        postalCode: { type: string }
+        accessNotes: { type: ["string", "null"] }
+    AddressInput:
+      type: object
+      required: [line1, city, state, postalCode]
+      properties:
+        label: { type: string }
+        line1: { type: string }
+        line2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        postalCode: { type: string }
+        accessNotes: { type: string }
+    ServicePlan:
+      type: object
+      required: [id, customerId, addressId, serviceType, frequency, nextOccurrence]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        addressId: { type: integer }
+        serviceType: { type: string }
+        frequency: { type: string, enum: [weekly, biweekly, monthly, every_n_weeks] }
+        intervalWeeks: { type: ["integer", "null"] }
+        nextOccurrence: { type: string, format: date }
+        pausedAt: { type: ["string", "null"], format: date-time }
+    ServicePlanInput:
+      type: object
+      required: [customerId, addressId, serviceType, frequency, nextOccurrence]
+      properties:
+        customerId: { type: integer }
+        addressId: { type: integer }
+        serviceType: { type: string }
+        frequency: { type: string }
+        intervalWeeks: { type: integer }
+        nextOccurrence: { type: string, format: date }
+    ServicePlanUpdate:
+      type: object
+      properties:
+        frequency: { type: string }
+        intervalWeeks: { type: integer }
+        nextOccurrence: { type: string, format: date }
+        serviceType: { type: string }
+    GenerateOccurrencesInput:
+      type: object
+      properties: { count: { type: integer, minimum: 1, default: 12 } }
+    ServiceOccurrence:
+      type: object
+      required: [id, planId, occurrenceDate, status]
+      properties:
+        id: { type: integer }
+        planId: { type: integer }
+        jobId: { type: ["integer", "null"] }
+        occurrenceDate: { type: string, format: date }
+        status: { type: string }
+        skippedReason: { type: ["string", "null"] }
+    SkipOccurrenceInput:
+      type: object
+      properties: { reason: { type: string } }
+    OccurrenceUpdate:
+      type: object
+      properties:
+        occurrenceDate: { type: string, format: date }
+        status: { type: string }
+        jobId: { type: integer }
+    Employee:
+      type: object
+      required: [id, clerkUserId, name, role]
+      properties:
+        id: { type: integer }
+        clerkUserId: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [owner, manager, cleaner] }
+        phone: { type: ["string", "null"] }
+    JobAssignment:
+      type: object
+      required: [id, jobId, employeeId, status]
+      properties:
+        id: { type: integer }
+        jobId: { type: integer }
+        employeeId: { type: integer }
+        status: { type: string }
+    TimeEntry:
+      type: object
+      required: [id, jobId, employeeId, clockIn]
+      properties:
+        id: { type: integer }
+        jobId: { type: integer }
+        employeeId: { type: integer }
+        clockIn: { type: string, format: date-time }
+        clockOut: { type: ["string", "null"], format: date-time }
+        breaksMinutes: { type: integer }
+        correctionMinutes: { type: integer }
+        correctionStatus: { type: string }
+    BreakInput:
+      type: object
+      required: [minutes]
+      properties: { minutes: { type: integer, minimum: 0 } }
+    TimeCorrectionInput:
+      type: object
+      required: [minutes, reason]
+      properties: { minutes: { type: integer }, reason: { type: string } }
+    ProofPhoto:
+      type: object
+      required: [id, jobId, kind, objectPath, contentType]
+      properties:
+        id: { type: integer }
+        jobId: { type: integer }
+        kind: { type: string, enum: [before, after] }
+        objectPath: { type: string }
+        contentType: { type: string }
+        byteSize: { type: ["integer", "null"] }
+    ProofPhotoInput:
+      type: object
+      required: [kind, objectPath]
+      properties:
+        kind: { type: string, enum: [before, after] }
+        objectPath: { type: string }
+        contentType: { type: string }
+        byteSize: { type: integer }
+    Incident:
+      type: object
+      required: [id, jobId, type, description, status]
+      properties:
+        id: { type: integer }
+        jobId: { type: integer }
+        type: { type: string }
+        description: { type: string }
+        status: { type: string }
+        resolution: { type: ["string", "null"] }
+    IncidentInput:
+      type: object
+      required: [description]
+      properties: { type: { type: string }, description: { type: string } }
+    IncidentUpdate:
+      type: object
+      properties: { status: { type: string }, resolution: { type: string } }
+    WorkerRate:
+      type: object
+      required: [id, employeeId, hourlyRate, effectiveFrom]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        hourlyRate: { type: string }
+        effectiveFrom: { type: string, format: date }
+    WorkerRateInput:
+      type: object
+      required: [employeeId, hourlyRate, effectiveFrom]
+      properties:
+        employeeId: { type: integer }
+        hourlyRate: { type: string }
+        effectiveFrom: { type: string, format: date }
+    Payout:
+      type: object
+      required: [id, employeeId, approvedMinutes, approvedHours]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        approvedMinutes: { type: integer }
+        approvedHours: { type: number }
+        hourlyRate: { type: ["string", "null"] }
+        amount: { type: ["number", "null"] }
+    ActivityEvent:
+      type: object
+      required: [id, type, title, createdAt]
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        title: { type: string }
+        detail: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    MessageRecord:
+      type: object
+      required: [id, recipient, body, channel, audience, status, provider, createdAt]
+      properties:
+        id: { type: integer }
+        recipient: { type: string }
+        body: { type: string }
+        channel: { type: string, enum: [sms, whatsapp] }
+        audience: { type: string, enum: [customer, employee] }
+        status: { type: string }
+        provider: { type: string }
+        recipientPhone: { type: ["string", "null"] }
+        recipientName: { type: ["string", "null"] }
+        providerMessageId: { type: ["string", "null"] }
+        sentAt: { type: ["string", "null"], format: date-time }
+        deliveredAt: { type: ["string", "null"], format: date-time }
+        failedAt: { type: ["string", "null"], format: date-time }
+        failureReason: { type: ["string", "null"] }
+        metadata: { type: object }
+        actorClerkUserId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
 

@@ -1,8 +1,12 @@
 import { Router, type IRouter } from "express";
+import { requireAuth, requireRole } from "../middlewares/auth";
+import { normalizeMessageIntent } from "../lib/messages";
 import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 import {
   db,
   jobsTable,
+  activityEventsTable,
+  messagesTable,
   teamMembersTable,
   type Job,
   type TeamMember,
@@ -20,6 +24,7 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+router.use(requireAuth);
 let seedPromise: Promise<void> | null = null;
 
 type ChecklistItem = { id: number; label: string; completed: boolean };
@@ -88,6 +93,7 @@ function mapMember(member: TeamMember) {
 }
 
 async function ensureSeedData() {
+  if (process.env.MAWII_DEV_SEED !== "true") return;
   if (seedPromise) return seedPromise;
   seedPromise = (async () => {
     const existingMembers = await db.select().from(teamMembersTable).orderBy(asc(teamMembersTable.id));
@@ -271,22 +277,15 @@ router.get("/dashboard/summary", async (_req, res) => {
 
 router.get("/activity", async (_req, res) => {
   await ensureSeedData();
-  const jobs = uniqueJobs(await db.select().from(jobsTable).orderBy(desc(jobsTable.createdAt))).slice(0, 6);
-  res.json(
-    jobs.map((job, index) => ({
-      id: job.id,
-      type: index % 3 === 0 ? "job" : index % 3 === 1 ? "checklist" : "message",
-      title:
-        index % 3 === 0
-          ? `Job scheduled for ${job.clientName}`
-          : index % 3 === 1
-            ? `Checklist updated for ${job.clientName}`
-            : `Client reminder queued for ${job.clientName}`,
-      detail: `${job.serviceType} · ${job.scheduledDate}`,
-      createdAt: job.createdAt.toISOString(),
-      jobId: job.id,
-    })),
-  );
+  const events = await db.select().from(activityEventsTable).orderBy(desc(activityEventsTable.createdAt)).limit(50);
+  res.json(events.map((event) => ({
+    id: event.id,
+    type: event.type,
+    title: event.title,
+    detail: event.detail ?? "",
+    createdAt: event.createdAt.toISOString(),
+    jobId: event.jobId,
+  })));
 });
 
 router.get("/jobs", async (req, res) => {
@@ -320,7 +319,7 @@ router.get("/jobs", async (req, res) => {
   res.json(await Promise.all(jobs.map(mapJob)));
 });
 
-router.post("/jobs", async (req, res) => {
+router.post("/jobs", requireRole("owner", "manager"), async (req, res) => {
   await ensureSeedData();
   const parsed = CreateJobBody.safeParse(req.body);
   if (!parsed.success) {
@@ -338,6 +337,12 @@ router.post("/jobs", async (req, res) => {
       photos: [],
     })
     .returning();
+  await db.insert(activityEventsTable).values({
+    type: "job",
+    title: "Job scheduled",
+    detail: `Job created for ${job.clientName}`,
+    jobId: job.id,
+  });
   res.status(201).json(await mapJob(job));
 });
 
@@ -352,7 +357,7 @@ router.get("/jobs/:id", async (req, res) => {
   res.json(await mapJob(job));
 });
 
-router.patch("/jobs/:id", async (req, res) => {
+router.patch("/jobs/:id", requireRole("owner", "manager"), async (req, res) => {
   await ensureSeedData();
   const params = UpdateJobParams.safeParse(req.params);
   const body = UpdateJobBody.safeParse(req.body);
@@ -376,7 +381,7 @@ router.patch("/jobs/:id", async (req, res) => {
   res.json(await mapJob(job));
 });
 
-router.patch("/jobs/:id/checklist", async (req, res) => {
+router.patch("/jobs/:id/checklist", requireRole("owner", "manager", "cleaner"), async (req, res) => {
   await ensureSeedData();
   const params = UpdateJobChecklistParams.safeParse(req.params);
   const body = UpdateJobChecklistBody.safeParse(req.body);
@@ -397,22 +402,61 @@ router.patch("/jobs/:id/checklist", async (req, res) => {
     .set({ checklist })
     .where(eq(jobsTable.id, params.data.id))
     .returning();
+  await db.insert(activityEventsTable).values({
+    type: "checklist",
+    title: "Checklist updated",
+    detail: `Checklist item ${body.data.itemId} updated`,
+    jobId: params.data.id,
+  });
   res.json(await mapJob(job));
 });
 
-router.post("/jobs/:id/messages", async (req, res) => {
+router.post("/jobs/:id/messages", requireRole("owner", "manager"), async (req, res) => {
   const params = SendJobMessageParams.safeParse(req.params);
   const body = SendJobMessageBody.safeParse(req.body);
   if (!params.success || !body.success) {
     res.status(400).json({ error: "Invalid message" });
     return;
   }
-  res.status(201).json({
-    id: Date.now(),
-    recipient: body.data.recipient,
-    body: body.data.body,
+  const intent = normalizeMessageIntent(body.data);
+  const [message] = await db.insert(messagesTable).values({
+    jobId: params.data.id,
+    recipient: intent.recipient,
+    body: intent.body,
+    channel: intent.channel,
+    audience: intent.audience,
+    recipientPhone: typeof req.body.recipientPhone === "string" ? req.body.recipientPhone : null,
+    recipientName: typeof req.body.recipientName === "string" ? req.body.recipientName : null,
     status: "queued",
-    createdAt: new Date().toISOString(),
+    provider: "internal",
+    actorClerkUserId: req.authContext?.clerkUserId,
+    metadata: typeof req.body.metadata === "object" && req.body.metadata ? req.body.metadata : {},
+  }).returning();
+  await db.insert(activityEventsTable).values({
+    actorClerkUserId: req.authContext?.clerkUserId,
+    type: "message",
+    title: "Message queued",
+    detail: `${intent.channel}/${intent.audience} message queued`,
+    jobId: params.data.id,
+  });
+  res.status(201).json({
+    id: message.id,
+    recipient: message.recipient,
+    body: message.body,
+    channel: message.channel,
+    audience: message.audience,
+    provider: message.provider,
+    recipientPhone: message.recipientPhone,
+    recipientName: message.recipientName,
+    providerMessageId: message.providerMessageId,
+    sentAt: message.sentAt?.toISOString() ?? null,
+    deliveredAt: message.deliveredAt?.toISOString() ?? null,
+    failedAt: message.failedAt?.toISOString() ?? null,
+    failureReason: message.failureReason,
+    metadata: message.metadata,
+    actorClerkUserId: message.actorClerkUserId,
+    status: message.status,
+    createdAt: message.createdAt.toISOString(),
   });
 });
 
@@ -422,7 +466,7 @@ router.get("/team", async (_req, res) => {
   res.json(members.map(mapMember));
 });
 
-router.post("/team", async (req, res) => {
+router.post("/team", requireRole("owner", "manager"), async (req, res) => {
   const parsed = CreateTeamMemberBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid team member" });

@@ -167,10 +167,33 @@ export const MessageInputRecipient = {
   team: 'team',
 } as const;
 
+export type MessageInputChannel = typeof MessageInputChannel[keyof typeof MessageInputChannel];
+
+
+export const MessageInputChannel = {
+  sms: 'sms',
+  whatsapp: 'whatsapp',
+} as const;
+
+export type MessageInputAudience = typeof MessageInputAudience[keyof typeof MessageInputAudience];
+
+
+export const MessageInputAudience = {
+  customer: 'customer',
+  employee: 'employee',
+} as const;
+
+export type MessageInputMetadata = { [key: string]: unknown };
+
 export interface MessageInput {
   recipient: MessageInputRecipient;
   /** @minLength 1 */
   body: string;
+  channel?: MessageInputChannel;
+  audience?: MessageInputAudience;
+  recipientPhone?: string;
+  recipientName?: string;
+  metadata?: MessageInputMetadata;
 }
 
 export type MessageRecipient = typeof MessageRecipient[keyof typeof MessageRecipient];
@@ -179,6 +202,22 @@ export type MessageRecipient = typeof MessageRecipient[keyof typeof MessageRecip
 export const MessageRecipient = {
   client: 'client',
   team: 'team',
+} as const;
+
+export type MessageChannel = typeof MessageChannel[keyof typeof MessageChannel];
+
+
+export const MessageChannel = {
+  sms: 'sms',
+  whatsapp: 'whatsapp',
+} as const;
+
+export type MessageAudience = typeof MessageAudience[keyof typeof MessageAudience];
+
+
+export const MessageAudience = {
+  customer: 'customer',
+  employee: 'employee',
 } as const;
 
 export type MessageStatus = typeof MessageStatus[keyof typeof MessageStatus];
@@ -190,11 +229,339 @@ export const MessageStatus = {
   failed: 'failed',
 } as const;
 
+export type MessageMetadata = { [key: string]: unknown };
+
 export interface Message {
   id: number;
   recipient: MessageRecipient;
   body: string;
+  channel: MessageChannel;
+  audience: MessageAudience;
+  /** @nullable */
+  recipientPhone?: string | null;
+  /** @nullable */
+  recipientName?: string | null;
+  /** @nullable */
+  providerMessageId?: string | null;
   status: MessageStatus;
+  createdAt: string;
+  /** @nullable */
+  sentAt?: string | null;
+  /** @nullable */
+  deliveredAt?: string | null;
+  /** @nullable */
+  failedAt?: string | null;
+  /** @nullable */
+  failureReason?: string | null;
+  metadata?: MessageMetadata;
+  /** @nullable */
+  actorClerkUserId?: string | null;
+}
+
+export interface UploadInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 1 */
+  size: number;
+  /** @minLength 1 */
+  contentType: string;
+}
+
+export type UploadUrlMetadata = {
+  name: string;
+  size: number;
+  contentType: string;
+};
+
+export interface UploadUrl {
+  uploadURL: string;
+  objectPath: string;
+  metadata: UploadUrlMetadata;
+}
+
+export interface Customer {
+  id: number;
+  name: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface CustomerInput {
+  name: string;
+  phone?: string;
+  email?: string;
+  notes?: string;
+}
+
+export interface Address {
+  id: number;
+  customerId: number;
+  label?: string;
+  line1: string;
+  /** @nullable */
+  line2?: string | null;
+  city: string;
+  state: string;
+  postalCode: string;
+  /** @nullable */
+  accessNotes?: string | null;
+}
+
+export interface AddressInput {
+  label?: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  accessNotes?: string;
+}
+
+export type ServicePlanFrequency = typeof ServicePlanFrequency[keyof typeof ServicePlanFrequency];
+
+
+export const ServicePlanFrequency = {
+  weekly: 'weekly',
+  biweekly: 'biweekly',
+  monthly: 'monthly',
+  every_n_weeks: 'every_n_weeks',
+} as const;
+
+export interface ServicePlan {
+  id: number;
+  customerId: number;
+  addressId: number;
+  serviceType: string;
+  frequency: ServicePlanFrequency;
+  /** @nullable */
+  intervalWeeks?: number | null;
+  nextOccurrence: string;
+  /** @nullable */
+  pausedAt?: string | null;
+}
+
+export interface ServicePlanInput {
+  customerId: number;
+  addressId: number;
+  serviceType: string;
+  frequency: string;
+  intervalWeeks?: number;
+  nextOccurrence: string;
+}
+
+export interface ServicePlanUpdate {
+  frequency?: string;
+  intervalWeeks?: number;
+  nextOccurrence?: string;
+  serviceType?: string;
+}
+
+export interface GenerateOccurrencesInput {
+  /** @minimum 1 */
+  count?: number;
+}
+
+export interface ServiceOccurrence {
+  id: number;
+  planId: number;
+  /** @nullable */
+  jobId?: number | null;
+  occurrenceDate: string;
+  status: string;
+  /** @nullable */
+  skippedReason?: string | null;
+}
+
+export interface SkipOccurrenceInput {
+  reason?: string;
+}
+
+export interface OccurrenceUpdate {
+  occurrenceDate?: string;
+  status?: string;
+  jobId?: number;
+}
+
+export type EmployeeRole = typeof EmployeeRole[keyof typeof EmployeeRole];
+
+
+export const EmployeeRole = {
+  owner: 'owner',
+  manager: 'manager',
+  cleaner: 'cleaner',
+} as const;
+
+export interface Employee {
+  id: number;
+  clerkUserId: string;
+  name: string;
+  role: EmployeeRole;
+  /** @nullable */
+  phone?: string | null;
+}
+
+export interface JobAssignment {
+  id: number;
+  jobId: number;
+  employeeId: number;
+  status: string;
+}
+
+export interface TimeEntry {
+  id: number;
+  jobId: number;
+  employeeId: number;
+  clockIn: string;
+  /** @nullable */
+  clockOut?: string | null;
+  breaksMinutes?: number;
+  correctionMinutes?: number;
+  correctionStatus?: string;
+}
+
+export interface BreakInput {
+  /** @minimum 0 */
+  minutes: number;
+}
+
+export interface TimeCorrectionInput {
+  minutes: number;
+  reason: string;
+}
+
+export type ProofPhotoKind = typeof ProofPhotoKind[keyof typeof ProofPhotoKind];
+
+
+export const ProofPhotoKind = {
+  before: 'before',
+  after: 'after',
+} as const;
+
+export interface ProofPhoto {
+  id: number;
+  jobId: number;
+  kind: ProofPhotoKind;
+  objectPath: string;
+  contentType: string;
+  /** @nullable */
+  byteSize?: number | null;
+}
+
+export type ProofPhotoInputKind = typeof ProofPhotoInputKind[keyof typeof ProofPhotoInputKind];
+
+
+export const ProofPhotoInputKind = {
+  before: 'before',
+  after: 'after',
+} as const;
+
+export interface ProofPhotoInput {
+  kind: ProofPhotoInputKind;
+  objectPath: string;
+  contentType?: string;
+  byteSize?: number;
+}
+
+export interface Incident {
+  id: number;
+  jobId: number;
+  type: string;
+  description: string;
+  status: string;
+  /** @nullable */
+  resolution?: string | null;
+}
+
+export interface IncidentInput {
+  type?: string;
+  description: string;
+}
+
+export interface IncidentUpdate {
+  status?: string;
+  resolution?: string;
+}
+
+export interface WorkerRate {
+  id: number;
+  employeeId: number;
+  hourlyRate: string;
+  effectiveFrom: string;
+}
+
+export interface WorkerRateInput {
+  employeeId: number;
+  hourlyRate: string;
+  effectiveFrom: string;
+}
+
+export interface Payout {
+  id: number;
+  employeeId: number;
+  approvedMinutes: number;
+  approvedHours: number;
+  /** @nullable */
+  hourlyRate?: string | null;
+  /** @nullable */
+  amount?: number | null;
+}
+
+export interface ActivityEvent {
+  id: number;
+  type: string;
+  title: string;
+  /** @nullable */
+  detail?: string | null;
+  createdAt: string;
+}
+
+export type MessageRecordChannel = typeof MessageRecordChannel[keyof typeof MessageRecordChannel];
+
+
+export const MessageRecordChannel = {
+  sms: 'sms',
+  whatsapp: 'whatsapp',
+} as const;
+
+export type MessageRecordAudience = typeof MessageRecordAudience[keyof typeof MessageRecordAudience];
+
+
+export const MessageRecordAudience = {
+  customer: 'customer',
+  employee: 'employee',
+} as const;
+
+export type MessageRecordMetadata = { [key: string]: unknown };
+
+export interface MessageRecord {
+  id: number;
+  recipient: string;
+  body: string;
+  channel: MessageRecordChannel;
+  audience: MessageRecordAudience;
+  status: string;
+  provider: string;
+  /** @nullable */
+  recipientPhone?: string | null;
+  /** @nullable */
+  recipientName?: string | null;
+  /** @nullable */
+  providerMessageId?: string | null;
+  /** @nullable */
+  sentAt?: string | null;
+  /** @nullable */
+  deliveredAt?: string | null;
+  /** @nullable */
+  failedAt?: string | null;
+  /** @nullable */
+  failureReason?: string | null;
+  metadata?: MessageRecordMetadata;
+  /** @nullable */
+  actorClerkUserId?: string | null;
   createdAt: string;
 }
 
@@ -213,4 +580,28 @@ export const ListJobsStatus = {
   completed: 'completed',
   attention: 'attention',
 } as const;
+
+export type GetActiveTimeEntriesParams = {
+jobId?: number;
+};
+
+export type ListTimeEntriesParams = {
+status?: ListTimeEntriesStatus;
+};
+
+export type ListTimeEntriesStatus = typeof ListTimeEntriesStatus[keyof typeof ListTimeEntriesStatus];
+
+
+export const ListTimeEntriesStatus = {
+  pending: 'pending',
+} as const;
+
+export type ListIncidentsParams = {
+status?: string;
+};
+
+export type ListPayoutsParams = {
+start: string;
+end: string;
+};
 

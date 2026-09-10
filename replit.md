@@ -31,7 +31,9 @@ An operations desk for coordinating housekeeping jobs, crew assignments, reminde
 ## Architecture decisions
 
 - Calendar days use date-only storage in PostgreSQL to avoid timezone shifts in schedule views.
-- The first build keeps outbound messages queued at the API boundary so SMS delivery can be connected without coupling the UI to a provider.
+- Owners and managers operate MAWII as the communication control center. Employee communication is WhatsApp-first for assignments, reminders, schedule changes, operational updates, and job information; these actions are owner/manager-triggered and do not become an employee inbox.
+- Customer communication is SMS-first for confirmations, reminders, ETA/service updates, completion notices, and rescheduling. Twilio remains deferred until internal operations are complete.
+- Outbound communication records are provider-neutral and retain channel, audience, queued/delivery status, provider metadata, and job context so Twilio SMS history can be connected later without changing the workflow.
 - Job checklists and proof-photo metadata travel with the job record so the closeout view stays focused on one work order.
 
 ## Product

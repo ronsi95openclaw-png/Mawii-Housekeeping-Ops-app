@@ -5,10 +5,18 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { MessageInputAudience } from './messageInputAudience';
+import type { MessageInputChannel } from './messageInputChannel';
+import type { MessageInputMetadata } from './messageInputMetadata';
 import type { MessageInputRecipient } from './messageInputRecipient';
 
 export interface MessageInput {
   recipient: MessageInputRecipient;
   /** @minLength 1 */
   body: string;
+  channel?: MessageInputChannel;
+  audience?: MessageInputAudience;
+  recipientPhone?: string;
+  recipientName?: string;
+  metadata?: MessageInputMetadata;
 }
