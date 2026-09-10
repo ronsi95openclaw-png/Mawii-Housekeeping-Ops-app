@@ -52,6 +52,19 @@ router.post("/customers", requireRole("owner", "manager"), async (req, res) => {
   const [customer] = await db.insert(customersTable).values({ name: input.name, phone: input.phone, email: input.email, notes: input.notes }).returning();
   res.status(201).json(customer);
 });
+router.patch("/customers/:id", requireRole("owner", "manager"), async (req, res) => {
+  const customerId = id(req.params.id);
+  const [existing] = await db.select().from(customersTable).where(eq(customersTable.id, customerId));
+  if (!existing) { res.status(404).json({ error: "Customer not found" }); return; }
+  const input = body(req);
+  if (Object.hasOwn(input, "name") && (typeof input.name !== "string" || !input.name.trim())) { res.status(400).json({ error: "name must be nonblank" }); return; }
+  const updates: Record<string, unknown> = {};
+  for (const field of ["name", "phone", "email", "notes"]) {
+    if (Object.hasOwn(input, field)) updates[field] = input[field];
+  }
+  const [customer] = await db.update(customersTable).set(updates).where(eq(customersTable.id, customerId)).returning();
+  res.json(customer);
+});
 router.get("/customers/:id/addresses", requireRole("owner", "manager"), async (req, res) => res.json(await db.select().from(addressesTable).where(eq(addressesTable.customerId, id(req.params.id)))));
 router.post("/customers/:id/addresses", requireRole("owner", "manager"), async (req, res) => {
   const input = body(req);
