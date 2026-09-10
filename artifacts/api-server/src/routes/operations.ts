@@ -294,12 +294,13 @@ router.get("/dashboard/summary", async (_req, res) => {
   await ensureSeedData();
   const jobs = uniqueJobs(await db.select().from(jobsTable).orderBy(asc(jobsTable.scheduledDate), asc(jobsTable.startTime)));
   const today = dateOffset(0);
+  const weekStart = dateOffset(-new Date().getDay());
   const upcoming = jobs.filter((job) => job.scheduledDate >= today && job.status !== "completed");
   const next = upcoming[0] ? await mapJob(upcoming[0]) : null;
   res.json({
     todayJobs: jobs.filter((job) => job.scheduledDate === today).length,
     openJobs: jobs.filter((job) => job.status !== "completed").length,
-    completedThisWeek: jobs.filter((job) => job.status === "completed").length,
+    completedThisWeek: jobs.filter((job) => job.status === "completed" && job.scheduledDate >= weekStart && job.scheduledDate <= today).length,
     attentionNeeded: jobs.filter((job) => job.status === "attention").length,
     nextJob: next,
   });

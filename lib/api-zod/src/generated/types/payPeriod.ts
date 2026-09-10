@@ -12,4 +12,12 @@ export interface PayPeriod {
   startsOn: Date;
   endsOn: Date;
   status: PayPeriodStatus;
+  /** @nullable */
+  approvedBy?: number | null;
+  /** @nullable */
+  approvedAt?: Date | null;
+  /** @nullable */
+  paidBy?: number | null;
+  /** @nullable */
+  paidAt?: Date | null;
 }

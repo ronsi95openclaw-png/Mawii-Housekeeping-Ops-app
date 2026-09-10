@@ -21,7 +21,7 @@ import { Settings } from '@/pages/settings';
 import { Customers } from '@/pages/customers';
 import { Recurring } from '@/pages/recurring';
 import { Field } from '@/pages/field';
-import { Quality, Payouts, ActivityPage } from '@/pages/misc';
+import { Quality, Payouts, Reports, ActivityPage } from '@/pages/misc';
 import { SignInPage } from '@/pages/auth';
 
 const queryClient = new QueryClient();
@@ -35,6 +35,7 @@ const navItemsDispatcher = [
   { href: '/team', label: 'Team', icon: UsersRound },
   { href: '/quality', label: 'Quality', icon: ShieldCheck },
   { href: '/payouts', label: 'Payouts', icon: DollarSign },
+  { href: '/reports', label: 'Reports', icon: ActivityIcon },
   { href: '/activity', label: 'Activity', icon: ActivityIcon },
   { href: '/settings', label: 'Settings', icon: Settings2 },
 ];
@@ -150,6 +151,7 @@ function Router() {
                 <Route path="/field" component={Field} />
                 <Route path="/quality" component={Quality} />
                 <Route path="/payouts" component={Payouts} />
+                <Route path="/reports" component={Reports} />
                 <Route path="/activity" component={ActivityPage} />
                 <Route path="/settings" component={Settings} />
                 <Route component={NotFound} />

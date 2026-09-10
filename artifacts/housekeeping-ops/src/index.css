@@ -4,6 +4,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Mawii is invite-only. Clerk's hosted sign-in footer must not expose signup. */
+.cl-footerAction,
+.cl-footerActionLink {
+  display: none !important;
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));

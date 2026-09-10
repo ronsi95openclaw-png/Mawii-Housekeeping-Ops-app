@@ -176,6 +176,39 @@ router.get("/pay-periods", requireRole("owner", "manager"), async (_req, res) =>
 router.post("/pay-periods/:id/approve", requireRole("owner", "manager"), async (req, res) => { const manager = await currentEmployee(req); const periodId = id(req.params.id); const [period] = await db.update(payPeriodsTable).set({ status: "approved", approvedBy: manager?.id, approvedAt: new Date() }).where(and(eq(payPeriodsTable.id, periodId), eq(payPeriodsTable.status, "draft"))).returning(); if (!period) { res.status(409).json({ error: "Pay period is not draft or does not exist" }); return; } const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, new Date(`${period.startsOn}T00:00:00Z`)), lte(timeEntriesTable.clockIn, new Date(`${period.endsOn}T23:59:59Z`)), eq(timeEntriesTable.correctionStatus, "approved"))); const rates = await db.select().from(workerRatesTable); const totals = new Map<number, number>(); for (const entry of entries) totals.set(entry.employeeId, (totals.get(entry.employeeId) ?? 0) + (entry.clockOut ? calculateWorkedMinutes(entry) : 0)); for (const [employeeId, minutes] of totals) { const rate = rates.find(item => item.employeeId === employeeId); if (rate) await db.insert(payoutRecordsTable).values({ payPeriodId: periodId, employeeId, approvedMinutes: minutes, hourlyRate: rate.hourlyRate, amount: String(minutes / 60 * Number(rate.hourlyRate)) }).onConflictDoNothing(); } res.json(period); });
 router.post("/pay-periods/:id/paid", requireRole("owner", "manager"), async (req, res) => { const manager = await currentEmployee(req); const [period] = await db.update(payPeriodsTable).set({ status: "paid", paidBy: manager?.id, paidAt: new Date() }).where(and(eq(payPeriodsTable.id, id(req.params.id)), eq(payPeriodsTable.status, "approved"))).returning(); if (!period) { res.status(409).json({ error: "Pay period must be approved first" }); return; } res.json(period); });
 router.post("/pay-periods/:id/adjustments", requireRole("owner", "manager"), async (req, res) => { const input = body(req); const manager = await currentEmployee(req); const [record] = await db.update(payoutRecordsTable).set({ adjustmentAmount: String(input.amount), adjustmentReason: input.reason, adjustmentActor: manager?.id }).where(and(eq(payoutRecordsTable.payPeriodId, id(req.params.id)), eq(payoutRecordsTable.employeeId, Number(input.employeeId)))).returning(); if (!record) { res.status(404).json({ error: "Payout record not found" }); return; } res.json(record); });
-router.get("/reports/owner", requireRole("owner", "manager"), async (req, res) => { const start = String(req.query.start); const end = String(req.query.end); if (!start || !end) { res.status(400).json({ error: "start and end are required" }); return; } const jobs = await db.select().from(jobsTable).where(and(gte(jobsTable.scheduledDate, start), lte(jobsTable.scheduledDate, end))); const incidents = await db.select().from(incidentsTable); const plans = await db.select().from(servicePlansTable); res.json({ dateRange: { start, end }, jobs: { volume: jobs.length, completed: jobs.filter(j => j.status === "completed").length }, employees: await db.select().from(employeesTable), recurringServices: plans.filter(p => !p.pausedAt).length, incidents: incidents.reduce((out, item) => { const key = `${item.severity}:${item.status}`; out[key] = (out[key] ?? 0) + 1; return out; }, {} as Record<string, number>), customerHistoryCount: new Set(jobs.map(j => j.clientName)).size }); });
+router.get("/reports/owner", requireRole("owner", "manager"), async (req, res) => {
+  const start = String(req.query.start);
+  const end = String(req.query.end);
+  if (!start || !end) { res.status(400).json({ error: "start and end are required" }); return; }
+  const jobs = await db.select().from(jobsTable).where(and(gte(jobsTable.scheduledDate, start), lte(jobsTable.scheduledDate, end)));
+  const incidents = await db.select().from(incidentsTable).where(and(gte(incidentsTable.createdAt, new Date(`${start}T00:00:00Z`)), lte(incidentsTable.createdAt, new Date(`${end}T23:59:59Z`))));
+  const plans = await db.select().from(servicePlansTable);
+  const employees = await db.select().from(employeesTable);
+  const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, new Date(`${start}T00:00:00Z`)), lte(timeEntriesTable.clockIn, new Date(`${end}T23:59:59Z`)), eq(timeEntriesTable.correctionStatus, "approved")));
+  const rates = await db.select().from(workerRatesTable);
+  const labor = new Map<number, { approvedMinutes: number; amount: number }>();
+  for (const entry of entries) {
+    const minutes = entry.clockOut ? calculateWorkedMinutes(entry) : 0;
+    const rate = rates.find(item => item.employeeId === entry.employeeId);
+    const current = labor.get(entry.employeeId) ?? { approvedMinutes: 0, amount: 0 };
+    current.approvedMinutes += minutes;
+    current.amount += rate ? minutes / 60 * Number(rate.hourlyRate) : 0;
+    labor.set(entry.employeeId, current);
+  }
+  const incidentSummary = incidents.reduce((out, item) => {
+    const key = `${item.severity}:${item.status}`;
+    out[key] = (out[key] ?? 0) + 1;
+    return out;
+  }, {} as Record<string, number>);
+  res.json({
+    dateRange: { start, end },
+    jobs: { volume: jobs.length, completed: jobs.filter(j => j.status === "completed").length },
+    employees: employees.map(employee => ({ ...employee, ...(labor.get(employee.id) ?? { approvedMinutes: 0, amount: 0 }) })),
+    payouts: { approvedMinutes: [...labor.values()].reduce((sum, item) => sum + item.approvedMinutes, 0), amount: [...labor.values()].reduce((sum, item) => sum + item.amount, 0) },
+    recurringServices: plans.filter(p => !p.pausedAt).length,
+    incidents: incidentSummary,
+    customerHistoryCount: new Set(jobs.map(j => j.clientName)).size,
+  });
+});
 
 export default router;

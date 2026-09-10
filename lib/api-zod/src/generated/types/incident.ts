@@ -5,13 +5,25 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { IncidentHistoryItem } from './incidentHistoryItem';
+import type { IncidentSeverity } from './incidentSeverity';
+import type { IncidentStatus } from './incidentStatus';
 
 export interface Incident {
   id: number;
   jobId: number;
   type: string;
+  severity: IncidentSeverity;
   description: string;
-  status: string;
+  evidencePhotoIds?: number[];
+  /** @nullable */
+  reporterEmployeeId?: number | null;
+  status: IncidentStatus;
   /** @nullable */
   resolution?: string | null;
+  /** @nullable */
+  reviewedBy?: number | null;
+  /** @nullable */
+  reviewedAt?: Date | null;
+  history?: IncidentHistoryItem[];
 }

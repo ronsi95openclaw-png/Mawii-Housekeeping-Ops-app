@@ -89,6 +89,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
 
   const [isUploading, setIsUploading] = useState(false);
   const [incidentText, setIncidentText] = useState('');
+  const [incidentSeverity, setIncidentSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
   const [showCorrection, setShowCorrection] = useState(false);
   const [correctionMins, setCorrectionMins] = useState(0);
 
@@ -123,7 +124,10 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
 
   const handleIncident = () => {
     if (!incidentText.trim()) return;
-    reportIncident.mutate({ jobId, data: { description: incidentText } }, { onSuccess: () => setIncidentText('') });
+    reportIncident.mutate({ jobId, data: { description: incidentText, severity: incidentSeverity } }, { onSuccess: () => {
+      setIncidentText('');
+      setIncidentSeverity('medium');
+    }});
   };
 
   const isChecklistComplete = !job.checklist?.some(i => !i.completed);
@@ -314,6 +318,15 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
               <input value={incidentText} onChange={(e) => setIncidentText(e.target.value)} placeholder="Describe the issue..." />
               <button disabled={!incidentText.trim() || reportIncident.isPending} onClick={handleIncident}><AlertTriangle size={15} /></button>
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', fontSize: '10px' }}>
+              Severity
+              <select value={incidentSeverity} onChange={(e) => setIncidentSeverity(e.target.value as typeof incidentSeverity)}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </label>
             <span className="message-note" style={{ marginTop: '8px' }}>
               <AlertTriangle size={13} /> {reportIncident.isSuccess ? 'Reported successfully' : 'Incidents alert dispatch immediately.'}
             </span>

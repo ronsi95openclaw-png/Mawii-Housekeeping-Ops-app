@@ -5,8 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { IncidentInputSeverity } from './incidentInputSeverity';
 
 export interface IncidentInput {
   type?: string;
+  severity?: IncidentInputSeverity;
   description: string;
+  evidencePhotoIds?: number[];
 }

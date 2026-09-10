@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { 
   useListActivityHistory, useListJobs, useListIncidents, useReviewIncident, 
-  useListEmployees, useCreateWorkerRate, useListPayouts, useListTimeEntries, useApproveTimeCorrection, useRejectTimeCorrection
+  useListEmployees, useCreateWorkerRate, useListPayouts, useListTimeEntries, useApproveTimeCorrection, useRejectTimeCorrection,
+  useListPayPeriods, useCreatePayPeriod, useApprovePayPeriod, useMarkPayPeriodPaid, useAddPayoutAdjustment, useGetOwnerReport
 } from '@workspace/api-client-react';
 import { PageIntro, LoadingState, ErrorState, EmptyState, formatDate, statusTone, Badge, statusLabel, formatTime } from '@/lib/shared';
 import { AlertTriangle, Activity as ActivityIcon, ShieldCheck, Check, DollarSign, Download } from 'lucide-react';
@@ -37,15 +38,18 @@ export function Quality() {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <strong>Job #{incident.jobId}</strong>
-                      <Badge tone={incident.status === 'open' ? 'red' : 'orange'}>{statusLabel(incident.status)}</Badge>
+                       <div style={{ display: 'flex', gap: '6px' }}>
+                         <Badge tone={incident.severity === 'critical' || incident.severity === 'high' ? 'red' : incident.severity === 'medium' ? 'orange' : 'neutral'}>{incident.severity}</Badge>
+                         <Badge tone={incident.status === 'open' ? 'red' : 'orange'}>{statusLabel(incident.status)}</Badge>
+                       </div>
                     </div>
                     <p style={{ whiteSpace: 'normal', marginTop: '6px' }}>{incident.description}</p>
                     {incident.status === 'open' && (
                       <div className="team-actions" style={{ marginTop: '12px' }}>
-                        <button className="button button-secondary" style={{ height: '28px' }} onClick={() => reviewIncident.mutate({ id: incident.id, data: { status: 'reviewed' } }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['incidents'] }) })}>Mark Reviewed</button>
+                         <button className="button button-secondary" style={{ height: '28px' }} onClick={() => reviewIncident.mutate({ id: incident.id, data: { status: 'in_review' } }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['incidents'] }) })}>Mark In Review</button>
                       </div>
                     )}
-                    {incident.status === 'reviewed' && (
+                     {incident.status === 'in_review' && (
                       <div className="team-actions" style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
                         <button className="button button-primary" style={{ height: '28px' }} onClick={() => reviewIncident.mutate({ id: incident.id, data: { status: 'resolved', resolution: 'Resolved with client' } }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['incidents'] }) })}><Check size={14}/> Resolve</button>
                         <button className="button button-secondary" style={{ height: '28px' }} onClick={() => reviewIncident.mutate({ id: incident.id, data: { status: 'reclean' } }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['incidents'] }) })}>Request Reclean</button>
@@ -143,6 +147,12 @@ export function Payouts() {
   const [end, setEnd] = useState(initialEnd);
   const employees = useListEmployees();
   const payouts = useListPayouts({ start, end });
+  const periods = useListPayPeriods();
+  const createPeriod = useCreatePayPeriod();
+  const approvePeriod = useApprovePayPeriod();
+  const markPaid = useMarkPayPeriodPaid();
+  const addAdjustment = useAddPayoutAdjustment();
+  const qc = useQueryClient();
   
   if (employees.isLoading || payouts.isLoading) return <LoadingState label="Loading financials" />;
   if (employees.isError || payouts.isError) return <ErrorState />;
@@ -151,12 +161,48 @@ export function Payouts() {
     window.open(`/api/payouts?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&format=csv`, '_blank');
   };
 
+  const currentPeriod = (periods.data as Array<{ id: number; startsOn: string; endsOn: string; status: string }> | undefined)?.find(
+    period => period.startsOn === start && period.endsOn === end,
+  );
+
+  const handleCreatePeriod = () => {
+    createPeriod.mutate({ data: { startsOn: start, endsOn: end } }, {
+      onSuccess: () => void qc.invalidateQueries({ queryKey: ['/api/pay-periods'] }),
+    });
+  };
+
+  const handleAdjustment = (employeeId: number) => {
+    if (!currentPeriod) return;
+    const amount = window.prompt('Adjustment amount (use a negative value to subtract):', '0');
+    if (amount === null || amount.trim() === '') return;
+    const reason = window.prompt('Reason for this adjustment:');
+    if (!reason?.trim()) return;
+    addAdjustment.mutate({ id: currentPeriod.id, data: { employeeId, amount, reason } }, {
+      onSuccess: () => void qc.invalidateQueries({ queryKey: ['/api/payouts'] }),
+    });
+  };
+
   return (
     <div className="content-stack">
       <PageIntro eyebrow="Financials" title="Payouts & Rates" body="Review approved hours and manage worker rates." action={<button className="button button-secondary" onClick={handleCsvDownload}><Download size={15}/> Export CSV</button>} />
       <section className="panel jobs-toolbar">
         <label>From<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label>
         <label>Through<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label>
+      </section>
+
+      <section className="panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <span className="eyebrow">Pay period</span>
+          <strong style={{ display: 'block', marginTop: '4px' }}>
+            {currentPeriod ? `${currentPeriod.startsOn} – ${currentPeriod.endsOn}` : 'No period created for this range'}
+          </strong>
+          {currentPeriod && <Badge tone={currentPeriod.status === 'paid' ? 'green' : currentPeriod.status === 'approved' ? 'orange' : 'neutral'}>{currentPeriod.status}</Badge>}
+        </div>
+        <div className="team-actions">
+          {!currentPeriod && <button className="button button-secondary" onClick={handleCreatePeriod} disabled={createPeriod.isPending}>Create pay period</button>}
+          {currentPeriod?.status === 'draft' && <button className="button button-primary" onClick={() => approvePeriod.mutate({ id: currentPeriod.id }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['/api/pay-periods'] }) })} disabled={approvePeriod.isPending}>Approve period</button>}
+          {currentPeriod?.status === 'approved' && <button className="button button-primary" onClick={() => markPaid.mutate({ id: currentPeriod.id }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['/api/pay-periods'] }) })} disabled={markPaid.isPending}>Mark paid</button>}
+        </div>
       </section>
       
       {payouts.data?.length ? (
@@ -170,7 +216,8 @@ export function Payouts() {
                   <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
                     <span><DollarSign size={13}/> {payout.approvedHours.toFixed(2)} hours</span>
                     <span>${payout.hourlyRate ?? '—'} / hour</span>
-                    <strong>{payout.amount == null ? 'Rate needed' : `$${payout.amount.toFixed(2)}`}</strong>
+                     <strong>{payout.amount == null ? 'Rate needed' : `$${payout.amount.toFixed(2)}`}</strong>
+                     {currentPeriod?.status !== 'paid' && <button className="text-button" onClick={() => handleAdjustment(payout.employeeId)}>Add adjustment</button>}
                   </div>
                 </div>
               </div>
@@ -180,6 +227,64 @@ export function Payouts() {
       ) : (
         <EmptyState title="No payouts this period" body="When jobs are completed and time is approved, worker earnings will appear here." />
       )}
+    </div>
+  );
+}
+
+export function Reports() {
+  const now = new Date();
+  const [start, setStart] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
+  const [end, setEnd] = useState(now.toISOString().slice(0, 10));
+  const report = useGetOwnerReport({ start, end });
+  const data = report.data as {
+    jobs?: { volume?: number; completed?: number };
+    employees?: Array<{ name?: string; role?: string; approvedMinutes?: number; amount?: number }>;
+    recurringServices?: number;
+    incidents?: Record<string, number>;
+    customerHistoryCount?: number;
+  } | undefined;
+
+  if (report.isLoading) return <LoadingState label="Loading owner report" />;
+  if (report.isError) return <ErrorState onRetry={() => void report.refetch()} />;
+
+  return (
+    <div className="content-stack">
+      <PageIntro eyebrow="Owner control center" title="Operations report" body="Review completion, recurring services, quality, and customer history for a selected date range." />
+      <section className="panel jobs-toolbar">
+        <label>From<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label>
+        <label>Through<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label>
+      </section>
+      <div className="dashboard-grid">
+        <section className="panel">
+          <span className="eyebrow">Jobs</span>
+          <h3>{data?.jobs?.completed ?? 0} completed of {data?.jobs?.volume ?? 0}</h3>
+          <p className="muted-copy">Scheduled jobs in this range</p>
+        </section>
+        <section className="panel">
+          <span className="eyebrow">Customers</span>
+          <h3>{data?.customerHistoryCount ?? 0}</h3>
+          <p className="muted-copy">Customers with service history</p>
+        </section>
+        <section className="panel">
+          <span className="eyebrow">Recurring services</span>
+          <h3>{data?.recurringServices ?? 0}</h3>
+          <p className="muted-copy">Active plans</p>
+        </section>
+        <section className="panel">
+          <span className="eyebrow">Incidents</span>
+          <h3>{Object.values(data?.incidents ?? {}).reduce((sum, count) => sum + count, 0)}</h3>
+          <p className="muted-copy">{Object.entries(data?.incidents ?? {}).map(([key, count]) => `${key}: ${count}`).join(' · ') || 'No incidents in range'}</p>
+        </section>
+      </div>
+      <section className="panel">
+        <div className="section-heading"><div><span className="eyebrow">Labor snapshot</span><h3>Employee totals</h3></div></div>
+        {data?.employees?.length ? data.employees.map((employee, index) => (
+          <div className="activity-row" key={`${employee.name}-${index}`}>
+            <div className="activity-copy"><strong>{employee.name || 'Employee'}</strong><span>{employee.role || 'team member'}</span></div>
+            <span>{((employee.approvedMinutes ?? 0) / 60).toFixed(1)} hours</span>
+          </div>
+        )) : <EmptyState title="No employee totals" body="Approved time will appear here as the report data accumulates." />}
+      </section>
     </div>
   );
 }

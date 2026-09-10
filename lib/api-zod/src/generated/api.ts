@@ -1113,16 +1113,26 @@ export const CreateIncidentParams = zod.object({
 
 export const CreateIncidentBody = zod.object({
   "type": zod.string().optional(),
-  "description": zod.string()
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']).optional(),
+  "description": zod.string(),
+  "evidencePhotoIds": zod.array(zod.number().int()).optional()
 })
 
 export const CreateIncidentResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "type": zod.string(),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']),
   "description": zod.string(),
-  "status": zod.string(),
-  "resolution": zod.string().nullish()
+  "evidencePhotoIds": zod.array(zod.number().int()).optional(),
+  "reporterEmployeeId": zod.number().int().nullish(),
+  "status": zod.enum(['open', 'in_review', 'resolved', 'reclean']),
+  "resolution": zod.string().nullish(),
+  "reviewedBy": zod.number().int().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "history": zod.array(zod.object({
+
+}).passthrough()).optional()
 })
 
 
@@ -1131,17 +1141,26 @@ export const ReviewIncidentParams = zod.object({
 })
 
 export const ReviewIncidentBody = zod.object({
-  "status": zod.string().optional(),
-  "resolution": zod.string().optional()
+  "status": zod.enum(['open', 'in_review', 'resolved', 'reclean']).optional(),
+  "resolution": zod.string().optional(),
+  "note": zod.string().optional()
 })
 
 export const ReviewIncidentResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "type": zod.string(),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']),
   "description": zod.string(),
-  "status": zod.string(),
-  "resolution": zod.string().nullish()
+  "evidencePhotoIds": zod.array(zod.number().int()).optional(),
+  "reporterEmployeeId": zod.number().int().nullish(),
+  "status": zod.enum(['open', 'in_review', 'resolved', 'reclean']),
+  "resolution": zod.string().nullish(),
+  "reviewedBy": zod.number().int().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "history": zod.array(zod.object({
+
+}).passthrough()).optional()
 })
 
 
@@ -1153,9 +1172,17 @@ export const ListIncidentsResponseItem = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "type": zod.string(),
+  "severity": zod.enum(['low', 'medium', 'high', 'critical']),
   "description": zod.string(),
-  "status": zod.string(),
-  "resolution": zod.string().nullish()
+  "evidencePhotoIds": zod.array(zod.number().int()).optional(),
+  "reporterEmployeeId": zod.number().int().nullish(),
+  "status": zod.enum(['open', 'in_review', 'resolved', 'reclean']),
+  "resolution": zod.string().nullish(),
+  "reviewedBy": zod.number().int().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "history": zod.array(zod.object({
+
+}).passthrough()).optional()
 })
 export const ListIncidentsResponse = zod.array(ListIncidentsResponseItem)
 
@@ -1243,7 +1270,11 @@ export const CreatePayPeriodResponse = zod.object({
   "id": zod.number().int(),
   "startsOn": zod.coerce.date(),
   "endsOn": zod.coerce.date(),
-  "status": zod.enum(['draft', 'approved', 'paid'])
+  "status": zod.enum(['draft', 'approved', 'paid']),
+  "approvedBy": zod.number().int().nullish(),
+  "approvedAt": zod.coerce.date().nullish(),
+  "paidBy": zod.number().int().nullish(),
+  "paidAt": zod.coerce.date().nullish()
 })
 
 
@@ -1255,7 +1286,11 @@ export const ApprovePayPeriodResponse = zod.object({
   "id": zod.number().int(),
   "startsOn": zod.coerce.date(),
   "endsOn": zod.coerce.date(),
-  "status": zod.enum(['draft', 'approved', 'paid'])
+  "status": zod.enum(['draft', 'approved', 'paid']),
+  "approvedBy": zod.number().int().nullish(),
+  "approvedAt": zod.coerce.date().nullish(),
+  "paidBy": zod.number().int().nullish(),
+  "paidAt": zod.coerce.date().nullish()
 })
 
 
@@ -1267,7 +1302,11 @@ export const MarkPayPeriodPaidResponse = zod.object({
   "id": zod.number().int(),
   "startsOn": zod.coerce.date(),
   "endsOn": zod.coerce.date(),
-  "status": zod.enum(['draft', 'approved', 'paid'])
+  "status": zod.enum(['draft', 'approved', 'paid']),
+  "approvedBy": zod.number().int().nullish(),
+  "approvedAt": zod.coerce.date().nullish(),
+  "paidBy": zod.number().int().nullish(),
+  "paidAt": zod.coerce.date().nullish()
 })
 
 

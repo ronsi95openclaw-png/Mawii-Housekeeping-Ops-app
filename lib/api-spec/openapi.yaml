@@ -1158,21 +1158,40 @@ components:
       properties: { body: { type: string, minLength: 1 } }
     Incident:
       type: object
-      required: [id, jobId, type, description, status]
+      required: [id, jobId, type, severity, description, status]
       properties:
         id: { type: integer }
         jobId: { type: integer }
         type: { type: string }
+        severity: { type: string, enum: [low, medium, high, critical] }
         description: { type: string }
-        status: { type: string }
+        evidencePhotoIds:
+          type: array
+          items: { type: integer }
+        reporterEmployeeId: { type: ["integer", "null"] }
+        status: { type: string, enum: [open, in_review, resolved, reclean] }
         resolution: { type: ["string", "null"] }
+        reviewedBy: { type: ["integer", "null"] }
+        reviewedAt: { type: ["string", "null"], format: date-time }
+        history:
+          type: array
+          items: { type: object }
     IncidentInput:
       type: object
       required: [description]
-      properties: { type: { type: string }, description: { type: string } }
+      properties:
+        type: { type: string }
+        severity: { type: string, enum: [low, medium, high, critical] }
+        description: { type: string }
+        evidencePhotoIds:
+          type: array
+          items: { type: integer }
     IncidentUpdate:
       type: object
-      properties: { status: { type: string }, resolution: { type: string } }
+      properties:
+        status: { type: string, enum: [open, in_review, resolved, reclean] }
+        resolution: { type: string }
+        note: { type: string }
     WorkerRate:
       type: object
       required: [id, employeeId, hourlyRate, effectiveFrom]
@@ -1236,6 +1255,10 @@ components:
         startsOn: { type: string, format: date }
         endsOn: { type: string, format: date }
         status: { type: string, enum: [draft, approved, paid] }
+        approvedBy: { type: ["integer", "null"] }
+        approvedAt: { type: ["string", "null"], format: date-time }
+        paidBy: { type: ["integer", "null"] }
+        paidAt: { type: ["string", "null"], format: date-time }
     PayPeriodInput:
       type: object
       required: [startsOn, endsOn]
@@ -1250,4 +1273,26 @@ components:
         amount: { type: string }
         reason: { type: string }
         createdAt: { type: string, format: date-time }
+    OwnerReport:
+      type: object
+      required: [dateRange, jobs, employees, recurringServices, incidents, customerHistoryCount]
+      properties:
+        dateRange:
+          type: object
+          properties:
+            start: { type: string, format: date }
+            end: { type: string, format: date }
+        jobs:
+          type: object
+          properties:
+            volume: { type: integer }
+            completed: { type: integer }
+        employees:
+          type: array
+          items: { type: object }
+        recurringServices: { type: integer }
+        incidents:
+          type: object
+          additionalProperties: { type: integer }
+        customerHistoryCount: { type: integer }
 

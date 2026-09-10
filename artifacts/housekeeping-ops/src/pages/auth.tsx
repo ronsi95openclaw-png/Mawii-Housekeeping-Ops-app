@@ -8,7 +8,12 @@ export function SignInPage() {
         <h1 style={{ margin: 0, fontSize: '24px', letterSpacing: '-0.05em' }}>Mawii Operations Desk</h1>
         <p style={{ margin: '8px 0 0', fontSize: '14px', color: 'hsl(var(--muted-foreground))' }}>Sign in to continue</p>
       </div>
-      <SignIn routing="path" path="/sign-in" forceRedirectUrl="/" />
+      <SignIn
+        routing="path"
+        path="/sign-in"
+        forceRedirectUrl="/"
+        appearance={{ elements: { footerAction: 'hidden' } }}
+      />
     </div>
   );
 }

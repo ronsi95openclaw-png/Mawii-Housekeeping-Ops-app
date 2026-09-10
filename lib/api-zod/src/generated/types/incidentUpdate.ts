@@ -5,8 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { IncidentUpdateStatus } from './incidentUpdateStatus';
 
 export interface IncidentUpdate {
-  status?: string;
+  status?: IncidentUpdateStatus;
   resolution?: string;
+  note?: string;
 }

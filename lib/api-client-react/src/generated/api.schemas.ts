@@ -592,24 +592,78 @@ export interface JobNoteInput {
   body: string;
 }
 
+export type IncidentSeverity = typeof IncidentSeverity[keyof typeof IncidentSeverity];
+
+
+export const IncidentSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical',
+} as const;
+
+export type IncidentStatus = typeof IncidentStatus[keyof typeof IncidentStatus];
+
+
+export const IncidentStatus = {
+  open: 'open',
+  in_review: 'in_review',
+  resolved: 'resolved',
+  reclean: 'reclean',
+} as const;
+
+export type IncidentHistoryItem = { [key: string]: unknown };
+
 export interface Incident {
   id: number;
   jobId: number;
   type: string;
+  severity: IncidentSeverity;
   description: string;
-  status: string;
+  evidencePhotoIds?: number[];
+  /** @nullable */
+  reporterEmployeeId?: number | null;
+  status: IncidentStatus;
   /** @nullable */
   resolution?: string | null;
+  /** @nullable */
+  reviewedBy?: number | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  history?: IncidentHistoryItem[];
 }
+
+export type IncidentInputSeverity = typeof IncidentInputSeverity[keyof typeof IncidentInputSeverity];
+
+
+export const IncidentInputSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical',
+} as const;
 
 export interface IncidentInput {
   type?: string;
+  severity?: IncidentInputSeverity;
   description: string;
+  evidencePhotoIds?: number[];
 }
 
+export type IncidentUpdateStatus = typeof IncidentUpdateStatus[keyof typeof IncidentUpdateStatus];
+
+
+export const IncidentUpdateStatus = {
+  open: 'open',
+  in_review: 'in_review',
+  resolved: 'resolved',
+  reclean: 'reclean',
+} as const;
+
 export interface IncidentUpdate {
-  status?: string;
+  status?: IncidentUpdateStatus;
   resolution?: string;
+  note?: string;
 }
 
 export interface WorkerRate {
@@ -705,6 +759,14 @@ export interface PayPeriod {
   startsOn: string;
   endsOn: string;
   status: PayPeriodStatus;
+  /** @nullable */
+  approvedBy?: number | null;
+  /** @nullable */
+  approvedAt?: string | null;
+  /** @nullable */
+  paidBy?: number | null;
+  /** @nullable */
+  paidAt?: string | null;
 }
 
 export interface PayPeriodInput {
@@ -717,6 +779,29 @@ export interface PayoutAdjustment {
   amount: string;
   reason: string;
   createdAt?: string;
+}
+
+export type OwnerReportDateRange = {
+  start?: string;
+  end?: string;
+};
+
+export type OwnerReportJobs = {
+  volume?: number;
+  completed?: number;
+};
+
+export type OwnerReportEmployeesItem = { [key: string]: unknown };
+
+export type OwnerReportIncidents = {[key: string]: number};
+
+export interface OwnerReport {
+  dateRange: OwnerReportDateRange;
+  jobs: OwnerReportJobs;
+  employees: OwnerReportEmployeesItem[];
+  recurringServices: number;
+  incidents: OwnerReportIncidents;
+  customerHistoryCount: number;
 }
 
 export type ListJobsParams = {
