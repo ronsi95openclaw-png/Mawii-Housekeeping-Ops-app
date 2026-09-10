@@ -39,6 +39,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "durationMinutes": zod.number().int().nullish(),
   "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "accessInstructions": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -110,6 +111,7 @@ export const ListJobsResponseItem = zod.object({
   "durationMinutes": zod.number().int().nullish(),
   "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "accessInstructions": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -182,6 +184,7 @@ export const CreateJobResponse = zod.object({
   "durationMinutes": zod.number().int().nullish(),
   "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "accessInstructions": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -234,6 +237,7 @@ export const GetJobResponse = zod.object({
   "durationMinutes": zod.number().int().nullish(),
   "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "accessInstructions": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -304,6 +308,7 @@ export const UpdateJobResponse = zod.object({
   "durationMinutes": zod.number().int().nullish(),
   "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "accessInstructions": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -361,6 +366,7 @@ export const UpdateJobChecklistResponse = zod.object({
   "durationMinutes": zod.number().int().nullish(),
   "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "accessInstructions": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -535,6 +541,7 @@ export const ImportElevateJobResponse = zod.object({
   "durationMinutes": zod.number().int().nullish(),
   "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "accessInstructions": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -1112,6 +1119,20 @@ export const RegisterProofPhotoResponse = zod.object({
 })
 
 
+export const ListEmployeeJobNotesParams = zod.object({
+  "jobId": zod.coerce.number().int()
+})
+
+export const ListEmployeeJobNotesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListEmployeeJobNotesResponse = zod.array(ListEmployeeJobNotesResponseItem)
+
+
 export const AddEmployeeJobNoteParams = zod.object({
   "jobId": zod.coerce.number().int()
 })
@@ -1150,6 +1171,7 @@ export const CompleteAssignedJobResponse = zod.object({
   "durationMinutes": zod.number().int().nullish(),
   "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "accessInstructions": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),

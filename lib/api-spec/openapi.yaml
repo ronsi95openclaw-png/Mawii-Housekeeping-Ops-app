@@ -476,6 +476,11 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ProofPhotoInput" } } } }
       responses: { "201": { description: Photo, content: { application/json: { schema: { $ref: "#/components/schemas/ProofPhoto" } } } } }
   /jobs/{jobId}/notes:
+    get:
+      operationId: listEmployeeJobNotes
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/JobId" }]
+      responses: { "200": { description: Notes, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/JobNote" } } } } } }
     post:
       operationId: addEmployeeJobNote
       tags: [field-ops]
@@ -662,6 +667,8 @@ components:
         frequency:
           type: ["string", "null"]
         notes:
+          type: ["string", "null"]
+        accessInstructions:
           type: ["string", "null"]
         team:
           type: array

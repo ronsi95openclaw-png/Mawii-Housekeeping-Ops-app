@@ -3193,6 +3193,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getRegisterProofPhotoMutationOptions(options));
     }
 
+export const getListEmployeeJobNotesUrl = (jobId: number,) => {
+
+
+
+
+  return `/api/jobs/${jobId}/notes`
+}
+
+export const listEmployeeJobNotes = async (jobId: number, options?: Parameters<typeof customFetch>[1]): Promise<JobNote[]> => {
+
+  return customFetch<JobNote[]>(getListEmployeeJobNotesUrl(jobId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEmployeeJobNotesQueryKey = (jobId: number,) => {
+    return [
+    `/api/jobs/${jobId}/notes`
+    ] as const;
+    }
+
+
+export const getListEmployeeJobNotesQueryOptions = <TData = Awaited<ReturnType<typeof listEmployeeJobNotes>>, TError = ErrorType<unknown>>(jobId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEmployeeJobNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEmployeeJobNotesQueryKey(jobId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEmployeeJobNotes>>> = ({ signal }) => listEmployeeJobNotes(jobId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: jobId !== null && jobId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEmployeeJobNotes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEmployeeJobNotesQueryResult = NonNullable<Awaited<ReturnType<typeof listEmployeeJobNotes>>>
+export type ListEmployeeJobNotesQueryError = ErrorType<unknown>
+
+
+
+export function useListEmployeeJobNotes<TData = Awaited<ReturnType<typeof listEmployeeJobNotes>>, TError = ErrorType<unknown>>(
+ jobId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEmployeeJobNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEmployeeJobNotesQueryOptions(jobId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getAddEmployeeJobNoteUrl = (jobId: number,) => {
 
 

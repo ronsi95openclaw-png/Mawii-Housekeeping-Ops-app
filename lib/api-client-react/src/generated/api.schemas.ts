@@ -86,6 +86,8 @@ export interface Job {
   frequency?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  accessInstructions?: string | null;
   team: TeamMember[];
   assignedEmployees?: Employee[];
   checklist: ChecklistItem[];

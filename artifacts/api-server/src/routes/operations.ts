@@ -263,6 +263,7 @@ async function mapJob(job: Job) {
     durationMinutes: job.durationMinutes,
     frequency: job.frequency,
     notes: job.notes,
+    accessInstructions: job.accessInstructions,
     clientPhone: job.clientPhone,
     externalSource: job.externalSource,
     externalId: job.externalId,
