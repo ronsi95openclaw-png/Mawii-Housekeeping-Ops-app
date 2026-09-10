@@ -164,6 +164,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Job"
+  /jobs/{jobId}/assignments:
+    post:
+      operationId: assignEmployeeToJob
+      tags: [field-ops]
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobAssignmentInput"
+      responses:
+        "201":
+          description: Job assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAssignment"
   /jobs/{id}/messages:
     post:
       operationId: sendJobMessage
@@ -648,6 +667,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TeamMember"
+        assignedEmployees:
+          type: array
+          items:
+            $ref: "#/components/schemas/Employee"
         checklist:
           type: array
           items:
@@ -699,6 +722,10 @@ components:
           type: array
           items:
             type: integer
+        employeeIds:
+          type: array
+          items:
+            type: integer
     JobUpdate:
       type: object
       properties:
@@ -726,6 +753,10 @@ components:
         frequency:
           type: string
         teamMemberIds:
+          type: array
+          items:
+            type: integer
+        employeeIds:
           type: array
           items:
             type: integer
@@ -1101,6 +1132,11 @@ components:
         jobId: { type: integer }
         employeeId: { type: integer }
         status: { type: string }
+    JobAssignmentInput:
+      type: object
+      required: [employeeId]
+      properties:
+        employeeId: { type: integer }
     TimeEntry:
       type: object
       required: [id, jobId, employeeId, clockIn]

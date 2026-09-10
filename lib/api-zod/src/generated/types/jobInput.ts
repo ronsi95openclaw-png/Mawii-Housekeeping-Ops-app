@@ -23,4 +23,5 @@ export interface JobInput {
   notes?: string;
   clientPhone?: string;
   teamMemberIds?: number[];
+  employeeIds?: number[];
 }

@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { normalizeMessageIntent } from "../lib/messages";
-import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import {
   db,
   jobImportEventsTable,
@@ -10,6 +10,8 @@ import {
   activityEventsTable,
   messagesTable,
   teamMembersTable,
+  employeesTable,
+  jobAssignmentsTable,
   type Job,
   type TeamMember,
 } from "@workspace/db";
@@ -236,11 +238,31 @@ function uniqueMembers(members: TeamMember[]) {
   });
 }
 
+async function canCleanerAccessJob(req: any, jobId: number) {
+  const role = (req.authContext?.role ?? "").toLowerCase();
+  if (role === "owner" || role === "manager") return true;
+  if (role !== "cleaner") return false;
+  const clerkUserId = req.authContext?.clerkUserId;
+  if (!clerkUserId) return false;
+  const employee = (await db.select().from(employeesTable).where(eq(employeesTable.clerkUserId, clerkUserId)))[0];
+  if (!employee) return false;
+  return (await db.select().from(jobAssignmentsTable).where(and(
+    eq(jobAssignmentsTable.jobId, jobId),
+    eq(jobAssignmentsTable.employeeId, employee.id),
+    inArray(jobAssignmentsTable.status, ["assigned", "accepted"]),
+  ))).length > 0;
+}
+
 async function mapJob(job: Job) {
   const allMembers = uniqueMembers(await db
     .select()
     .from(teamMembersTable)
     .orderBy(asc(teamMembersTable.id)));
+  const assignments = await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, job.id));
+  const employeeIds = assignments.map((assignment) => assignment.employeeId);
+  const assignedEmployees = employeeIds.length
+    ? await db.select().from(employeesTable).where(inArray(employeesTable.id, employeeIds))
+    : [];
   return {
     id: job.id,
     clientName: job.clientName,
@@ -259,6 +281,7 @@ async function mapJob(job: Job) {
     externalSource: job.externalSource,
     externalId: job.externalId,
     team: allMembers.filter((member) => job.teamMemberIds.includes(member.id)).map(mapMember),
+    assignedEmployees,
     checklist: (job.checklist ?? []) as ChecklistItem[],
     photos: (job.photos ?? []) as Photo[],
     createdAt: job.createdAt.toISOString(),
@@ -347,6 +370,24 @@ router.get("/jobs", async (req, res) => {
     .from(jobsTable)
     .where(filters.length ? and(...filters) : undefined)
     .orderBy(asc(jobsTable.scheduledDate), asc(jobsTable.startTime)));
+  const role = (req.authContext?.role ?? "").toLowerCase();
+  if (role === "cleaner") {
+    const clerkUserId = req.authContext?.clerkUserId;
+    const employee = clerkUserId
+      ? (await db.select().from(employeesTable).where(eq(employeesTable.clerkUserId, clerkUserId)))[0]
+      : undefined;
+    if (!employee) {
+      res.status(403).json({ error: "No employee profile is linked to this Clerk user" });
+      return;
+    }
+    const assignments = await db.select().from(jobAssignmentsTable).where(and(
+      eq(jobAssignmentsTable.employeeId, employee.id),
+      inArray(jobAssignmentsTable.status, ["assigned", "accepted"]),
+    ));
+    const assignedJobIds = new Set(assignments.map((assignment) => assignment.jobId));
+    res.json(await Promise.all(jobs.filter((job) => assignedJobIds.has(job.id)).map(mapJob)));
+    return;
+  }
   res.json(await Promise.all(jobs.map(mapJob)));
 });
 
@@ -357,17 +398,23 @@ router.post("/jobs", requireRole("owner", "manager"), async (req, res) => {
     res.status(400).json({ error: "Invalid job payload" });
     return;
   }
+  const { employeeIds, ...jobInput } = parsed.data;
   const [job] = await db
     .insert(jobsTable)
     .values({
-      ...parsed.data,
-      scheduledDate: parsed.data.scheduledDate.toISOString().slice(0, 10),
+      ...jobInput,
+      scheduledDate: jobInput.scheduledDate.toISOString().slice(0, 10),
       status: "scheduled",
-      teamMemberIds: parsed.data.teamMemberIds ?? [],
-      checklist: checklistForService(parsed.data.serviceType),
+      teamMemberIds: jobInput.teamMemberIds ?? [],
+      checklist: checklistForService(jobInput.serviceType),
       photos: [],
     })
     .returning();
+  if (employeeIds?.length) {
+    await db.insert(jobAssignmentsTable).values(
+      employeeIds.map((employeeId) => ({ jobId: job.id, employeeId, status: "assigned" })),
+    );
+  }
   await db.insert(activityEventsTable).values({
     type: "job",
     title: "Job scheduled",
@@ -385,6 +432,10 @@ router.get("/jobs/:id", async (req, res) => {
     res.status(404).json({ error: "Job not found" });
     return;
   }
+  if (!(await canCleanerAccessJob(req, job.id))) {
+    res.status(403).json({ error: "Job is not assigned to this cleaner" });
+    return;
+  }
   res.json(await mapJob(job));
 });
 
@@ -396,7 +447,7 @@ router.patch("/jobs/:id", requireRole("owner", "manager"), async (req, res) => {
     res.status(400).json({ error: "Invalid job update" });
     return;
   }
-  const { scheduledDate, ...rest } = body.data;
+  const { scheduledDate, employeeIds, ...rest } = body.data;
   const updateData = scheduledDate
     ? { ...rest, scheduledDate: scheduledDate.toISOString().slice(0, 10) }
     : rest;
@@ -409,7 +460,50 @@ router.patch("/jobs/:id", requireRole("owner", "manager"), async (req, res) => {
     res.status(404).json({ error: "Job not found" });
     return;
   }
+  if (employeeIds) {
+    const existingAssignments = await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, job.id));
+    const requestedIds = new Set(employeeIds);
+    for (const assignment of existingAssignments) {
+      if (!requestedIds.has(assignment.employeeId)) {
+        await db.delete(jobAssignmentsTable).where(eq(jobAssignmentsTable.id, assignment.id));
+      }
+    }
+    for (const employeeId of requestedIds) {
+      const existing = existingAssignments.find((assignment) => assignment.employeeId === employeeId);
+      if (existing) {
+        if (existing.status === "declined") {
+          await db.update(jobAssignmentsTable).set({ status: "assigned" }).where(eq(jobAssignmentsTable.id, existing.id));
+        }
+      } else {
+        await db.insert(jobAssignmentsTable).values({ jobId: job.id, employeeId, status: "assigned" });
+      }
+    }
+  }
   res.json(await mapJob(job));
+});
+
+router.post("/jobs/:jobId/assignments", requireRole("owner", "manager"), async (req, res) => {
+  const jobId = Number(req.params.jobId);
+  const employeeId = Number(req.body?.employeeId);
+  if (!Number.isInteger(jobId) || !Number.isInteger(employeeId) || employeeId <= 0) {
+    res.status(400).json({ error: "employeeId is required" });
+    return;
+  }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, employeeId));
+  if (!job || !employee || employee.active !== "true") {
+    res.status(404).json({ error: "Job or active employee not found" });
+    return;
+  }
+  const existing = (await db.select().from(jobAssignmentsTable).where(and(eq(jobAssignmentsTable.jobId, jobId), eq(jobAssignmentsTable.employeeId, employeeId))))[0];
+  if (existing) {
+    const [updated] = await db.update(jobAssignmentsTable).set({ status: "assigned" }).where(eq(jobAssignmentsTable.id, existing.id)).returning();
+    res.status(201).json(updated);
+    return;
+  }
+  const [assignment] = await db.insert(jobAssignmentsTable).values({ jobId, employeeId, status: "assigned" }).returning();
+  await db.insert(activityEventsTable).values({ type: "assignment", title: "Employee assigned", detail: `${employee.name} assigned to ${job.clientName}`, jobId });
+  res.status(201).json(assignment);
 });
 
 router.patch("/jobs/:id/checklist", requireRole("owner", "manager", "cleaner"), async (req, res) => {
@@ -423,6 +517,10 @@ router.patch("/jobs/:id/checklist", requireRole("owner", "manager", "cleaner"), 
   const [existing] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
   if (!existing) {
     res.status(404).json({ error: "Job not found" });
+    return;
+  }
+  if (!(await canCleanerAccessJob(req, existing.id))) {
+    res.status(403).json({ error: "Job is not assigned to this cleaner" });
     return;
   }
   const checklist = ((existing.checklist ?? []) as ChecklistItem[]).map((item) =>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation } from 'wouter';
 import { 
   useListJobs, useCreateJob, useGetJob, useUpdateJob, useUpdateJobChecklist, 
-  useSendJobMessage, useListTeam, useListJobMessages, useListCustomers, useListCustomerAddresses,
+  useSendJobMessage, useListEmployees, useListJobMessages, useListCustomers, useListCustomerAddresses,
   useGetElevateImportStatus, getGetElevateImportStatusQueryKey,
   getListJobsQueryKey, getGetJobQueryKey, getGetDashboardSummaryQueryKey, getListJobMessagesQueryKey
 } from '@workspace/api-client-react';
@@ -27,6 +27,7 @@ type NewJobForm = {
   notes: string;
   clientPhone: string;
   teamMemberIds: number[];
+  employeeIds: number[];
 };
 
 export function Jobs() {
@@ -150,9 +151,9 @@ export function Jobs() {
 }
 
 function CreateJobDialog({ onClose, onSubmit, pending }: { onClose: () => void; onSubmit: (data: NewJobForm) => void; pending: boolean }) {
-  const team = useListTeam();
+  const employees = useListEmployees();
   const customers = useListCustomers();
-  const [form, setForm] = useState({ clientName: '', address: '', scheduledDate: todayISO(), startTime: '09:00', endTime: '12:00', serviceType: 'Standard cleaning', serviceVariant: '2 bed / 2 bath Standard', addOns: [] as string[], durationMinutes: 180, frequency: 'Every 4 weeks', notes: '', clientPhone: '', teamMemberIds: [] as number[], customerId: '', addressId: '' });
+  const [form, setForm] = useState({ clientName: '', address: '', scheduledDate: todayISO(), startTime: '09:00', endTime: '12:00', serviceType: 'Standard cleaning', serviceVariant: '2 bed / 2 bath Standard', addOns: [] as string[], durationMinutes: 180, frequency: 'Every 4 weeks', notes: '', clientPhone: '', teamMemberIds: [] as number[], employeeIds: [] as number[], customerId: '', addressId: '' });
   
   const selectedCustomerId = Number(form.customerId);
   const addresses = useListCustomerAddresses(selectedCustomerId, { query: { enabled: !!selectedCustomerId, queryKey: ['addresses', selectedCustomerId] } });
@@ -160,12 +161,12 @@ function CreateJobDialog({ onClose, onSubmit, pending }: { onClose: () => void; 
   const update = (key: keyof typeof form, value: any) => setForm((current) => ({ ...current, [key]: value }));
   const toggleAddOn = (addOn: string) => setForm((current) => ({ ...current, addOns: current.addOns.includes(addOn) ? current.addOns.filter((item) => item !== addOn) : [...current.addOns, addOn] }));
   
-  const handleTeamMemberToggle = (id: number) => {
+  const handleEmployeeToggle = (id: number) => {
     setForm(current => ({
       ...current,
-      teamMemberIds: current.teamMemberIds.includes(id) 
-        ? current.teamMemberIds.filter(mId => mId !== id)
-        : [...current.teamMemberIds, id]
+      employeeIds: current.employeeIds.includes(id)
+        ? current.employeeIds.filter(employeeId => employeeId !== id)
+        : [...current.employeeIds, id]
     }));
   };
   
@@ -223,13 +224,13 @@ function CreateJobDialog({ onClose, onSubmit, pending }: { onClose: () => void; 
           <fieldset className="add-on-field" style={{ gridRow: 'span 2' }}>
             <legend>Assigned team</legend>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {(team.data || []).map(member => (
-                <label key={member.id}>
-                  <input type="checkbox" checked={form.teamMemberIds.includes(member.id)} onChange={() => handleTeamMemberToggle(member.id)} />
-                  {member.name}
+              {(employees.data || []).map(employee => (
+                <label key={employee.id}>
+                  <input type="checkbox" checked={form.employeeIds.includes(employee.id)} onChange={() => handleEmployeeToggle(employee.id)} />
+                  {employee.name} · {employee.role}
                 </label>
               ))}
-              {!(team.data || []).length && <span style={{fontSize: '9px', color: 'hsl(var(--muted-foreground))'}}>No team members available.</span>}
+              {!(employees.data || []).length && <span style={{fontSize: '9px', color: 'hsl(var(--muted-foreground))'}}>No employees available.</span>}
             </div>
           </fieldset>
 
@@ -266,6 +267,7 @@ function JobDetail({ job }: { job: Job }) {
   const qc = useQueryClient();
   const detail = useGetJob(job.id, { query: { queryKey: getGetJobQueryKey(job.id) } });
   const update = useUpdateJob();
+  const employees = useListEmployees();
   const checklist = useUpdateJobChecklist();
   const sendMessage = useSendJobMessage();
   const messages = useListJobMessages(job.id, { query: { enabled: !!job.id, queryKey: getListJobMessagesQueryKey(job.id) } });
@@ -350,7 +352,7 @@ function JobDetail({ job }: { job: Job }) {
       <div className="detail-section">
         <div className="detail-section-head">
           <div><span className="eyebrow">Crew</span><h3>Assigned team</h3></div>
-          <button className="text-button" onClick={() => patch({ teamMemberIds: [] })} data-testid="button-clear-team">Clear team</button>
+          <button className="text-button" onClick={() => patch({ employeeIds: [] })} data-testid="button-clear-team">Clear team</button>
         </div>
         <label style={{ display: 'block', marginBottom: '10px', fontSize: '10px' }}>
           Owner-triggered WhatsApp template
@@ -362,12 +364,12 @@ function JobDetail({ job }: { job: Job }) {
           </select>
         </label>
         <div className="assigned-team">
-          {current.team?.length ? current.team.map((member) => (
+           {current.assignedEmployees?.length ? current.assignedEmployees.map((member) => (
             <div className="assigned-member" key={member.id}>
               <Avatar member={member} />
               <div><strong>{member.name}</strong><span>{member.role}</span></div>
               <a
-                href={whatsappUrl(member.phone, whatsappMessage(whatsappTemplate, member.name, current))}
+                 href={whatsappUrl(member.phone ?? '', whatsappMessage(whatsappTemplate, member.name, current))}
                 target="_blank"
                 rel="noreferrer"
                 className="button button-secondary"
@@ -377,12 +379,19 @@ function JobDetail({ job }: { job: Job }) {
               >
                 <MessageSquare size={13} /> Owner-triggered WhatsApp
               </a>
-              <a href={`tel:${member.phone}`} className="icon-button" data-testid={`link-call-team-${member.id}`} aria-label={`Call ${member.name}`}><Phone size={14} /></a>
+               <a href={`tel:${member.phone ?? ''}`} className="icon-button" data-testid={`link-call-team-${member.id}`} aria-label={`Call ${member.name}`}><Phone size={14} /></a>
             </div>
           )) : (
             <span className="muted-copy">No team assigned.</span>
           )}
         </div>
+         <div className="assigned-team" style={{ marginTop: '10px' }}>
+           {(employees.data || []).filter((employee) => !current.assignedEmployees?.some((assigned) => assigned.id === employee.id)).map((employee) => (
+             <button key={employee.id} className="button button-secondary" onClick={() => patch({ employeeIds: [...(current.assignedEmployees?.map((assigned) => assigned.id) || []), employee.id] })}>
+               Assign {employee.name}
+             </button>
+           ))}
+         </div>
       </div>
       
       <div className="detail-section proof-section">

@@ -46,6 +46,7 @@ export * from './incidentUpdate';
 export * from './incidentUpdateStatus';
 export * from './job';
 export * from './jobAssignment';
+export * from './jobAssignmentInput';
 export * from './jobInput';
 export * from './jobNote';
 export * from './jobNoteInput';

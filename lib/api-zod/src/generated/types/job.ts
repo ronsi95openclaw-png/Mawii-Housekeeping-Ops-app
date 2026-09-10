@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChecklistItem } from './checklistItem';
+import type { Employee } from './employee';
 import type { JobStatus } from './jobStatus';
 import type { Photo } from './photo';
 import type { TeamMember } from './teamMember';
@@ -29,6 +30,7 @@ export interface Job {
   /** @nullable */
   notes?: string | null;
   team: TeamMember[];
+  assignedEmployees?: Employee[];
   checklist: ChecklistItem[];
   photos?: Photo[];
   /** @nullable */

@@ -37,6 +37,24 @@ export interface TeamMember {
   initials?: string;
 }
 
+export type EmployeeRole = typeof EmployeeRole[keyof typeof EmployeeRole];
+
+
+export const EmployeeRole = {
+  owner: 'owner',
+  manager: 'manager',
+  cleaner: 'cleaner',
+} as const;
+
+export interface Employee {
+  id: number;
+  clerkUserId: string;
+  name: string;
+  role: EmployeeRole;
+  /** @nullable */
+  phone?: string | null;
+}
+
 export interface ChecklistItem {
   id: number;
   label: string;
@@ -69,6 +87,7 @@ export interface Job {
   /** @nullable */
   notes?: string | null;
   team: TeamMember[];
+  assignedEmployees?: Employee[];
   checklist: ChecklistItem[];
   photos?: Photo[];
   /** @nullable */
@@ -126,6 +145,7 @@ export interface JobInput {
   notes?: string;
   clientPhone?: string;
   teamMemberIds?: number[];
+  employeeIds?: number[];
 }
 
 export type JobUpdateStatus = typeof JobUpdateStatus[keyof typeof JobUpdateStatus];
@@ -150,6 +170,7 @@ export interface JobUpdate {
   durationMinutes?: number;
   frequency?: string;
   teamMemberIds?: number[];
+  employeeIds?: number[];
 }
 
 export interface ChecklistUpdate {
@@ -461,24 +482,6 @@ export interface OccurrenceUpdate {
   jobId?: number;
 }
 
-export type EmployeeRole = typeof EmployeeRole[keyof typeof EmployeeRole];
-
-
-export const EmployeeRole = {
-  owner: 'owner',
-  manager: 'manager',
-  cleaner: 'cleaner',
-} as const;
-
-export interface Employee {
-  id: number;
-  clerkUserId: string;
-  name: string;
-  role: EmployeeRole;
-  /** @nullable */
-  phone?: string | null;
-}
-
 export type EmployeeInputRole = typeof EmployeeInputRole[keyof typeof EmployeeInputRole];
 
 
@@ -518,6 +521,10 @@ export interface JobAssignment {
   jobId: number;
   employeeId: number;
   status: string;
+}
+
+export interface JobAssignmentInput {
+  employeeId: number;
 }
 
 export interface TimeEntry {

@@ -7,8 +7,8 @@ import fieldOpsRouter from "./field-ops";
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(fieldOpsRouter);
 router.use(operationsRouter);
 router.use(storageRouter);
-router.use(fieldOpsRouter);
 
 export default router;

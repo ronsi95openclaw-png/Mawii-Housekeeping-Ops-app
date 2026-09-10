@@ -19,4 +19,5 @@ export interface JobUpdate {
   durationMinutes?: number;
   frequency?: string;
   teamMemberIds?: number[];
+  employeeIds?: number[];
 }

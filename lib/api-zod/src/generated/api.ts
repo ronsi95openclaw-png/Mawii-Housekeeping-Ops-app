@@ -47,6 +47,13 @@ export const GetDashboardSummaryResponse = zod.object({
   "status": zod.enum(['available', 'assigned', 'off']),
   "initials": zod.string().optional()
 })),
+  "assignedEmployees": zod.array(zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish()
+})).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
   "label": zod.string(),
@@ -111,6 +118,13 @@ export const ListJobsResponseItem = zod.object({
   "status": zod.enum(['available', 'assigned', 'off']),
   "initials": zod.string().optional()
 })),
+  "assignedEmployees": zod.array(zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish()
+})).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
   "label": zod.string(),
@@ -150,7 +164,8 @@ export const CreateJobBody = zod.object({
   "frequency": zod.string().optional(),
   "notes": zod.string().optional(),
   "clientPhone": zod.string().optional(),
-  "teamMemberIds": zod.array(zod.number().int()).optional()
+  "teamMemberIds": zod.array(zod.number().int()).optional(),
+  "employeeIds": zod.array(zod.number().int()).optional()
 })
 
 export const CreateJobResponse = zod.object({
@@ -175,6 +190,13 @@ export const CreateJobResponse = zod.object({
   "status": zod.enum(['available', 'assigned', 'off']),
   "initials": zod.string().optional()
 })),
+  "assignedEmployees": zod.array(zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish()
+})).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
   "label": zod.string(),
@@ -220,6 +242,13 @@ export const GetJobResponse = zod.object({
   "status": zod.enum(['available', 'assigned', 'off']),
   "initials": zod.string().optional()
 })),
+  "assignedEmployees": zod.array(zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish()
+})).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
   "label": zod.string(),
@@ -257,7 +286,8 @@ export const UpdateJobBody = zod.object({
   "addOns": zod.array(zod.string()).optional(),
   "durationMinutes": zod.number().int().min(updateJobBodyDurationMinutesMin).optional(),
   "frequency": zod.string().optional(),
-  "teamMemberIds": zod.array(zod.number().int()).optional()
+  "teamMemberIds": zod.array(zod.number().int()).optional(),
+  "employeeIds": zod.array(zod.number().int()).optional()
 })
 
 export const UpdateJobResponse = zod.object({
@@ -282,6 +312,13 @@ export const UpdateJobResponse = zod.object({
   "status": zod.enum(['available', 'assigned', 'off']),
   "initials": zod.string().optional()
 })),
+  "assignedEmployees": zod.array(zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish()
+})).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
   "label": zod.string(),
@@ -332,6 +369,13 @@ export const UpdateJobChecklistResponse = zod.object({
   "status": zod.enum(['available', 'assigned', 'off']),
   "initials": zod.string().optional()
 })),
+  "assignedEmployees": zod.array(zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish()
+})).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
   "label": zod.string(),
@@ -345,6 +389,22 @@ export const UpdateJobChecklistResponse = zod.object({
 })).optional(),
   "clientPhone": zod.string().nullish(),
   "createdAt": zod.coerce.date().optional()
+})
+
+
+export const AssignEmployeeToJobParams = zod.object({
+  "jobId": zod.coerce.number().int()
+})
+
+export const AssignEmployeeToJobBody = zod.object({
+  "employeeId": zod.number().int()
+})
+
+export const AssignEmployeeToJobResponse = zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "status": zod.string()
 })
 
 
@@ -483,6 +543,13 @@ export const ImportElevateJobResponse = zod.object({
   "status": zod.enum(['available', 'assigned', 'off']),
   "initials": zod.string().optional()
 })),
+  "assignedEmployees": zod.array(zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish()
+})).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
   "label": zod.string(),
@@ -1091,6 +1158,13 @@ export const CompleteAssignedJobResponse = zod.object({
   "status": zod.enum(['available', 'assigned', 'off']),
   "initials": zod.string().optional()
 })),
+  "assignedEmployees": zod.array(zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish()
+})).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
   "label": zod.string(),

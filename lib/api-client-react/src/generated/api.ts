@@ -47,6 +47,7 @@ import type {
   IncidentUpdate,
   Job,
   JobAssignment,
+  JobAssignmentInput,
   JobInput,
   JobNote,
   JobNoteInput,
@@ -714,6 +715,72 @@ export const useUpdateJobChecklist = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateJobChecklistMutationOptions(options));
+    }
+
+export const getAssignEmployeeToJobUrl = (jobId: number,) => {
+
+
+
+
+  return `/api/jobs/${jobId}/assignments`
+}
+
+export const assignEmployeeToJob = async (jobId: number,
+    jobAssignmentInput: JobAssignmentInput, options?: Parameters<typeof customFetch>[1]): Promise<JobAssignment> => {
+
+  return customFetch<JobAssignment>(getAssignEmployeeToJobUrl(jobId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(jobAssignmentInput)
+  }
+);}
+
+
+
+
+
+export const getAssignEmployeeToJobMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignEmployeeToJob>>, TError,{jobId: number;data: BodyType<JobAssignmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof assignEmployeeToJob>>, TError,{jobId: number;data: BodyType<JobAssignmentInput>}, TContext> => {
+
+const mutationKey = ['assignEmployeeToJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof assignEmployeeToJob>>, {jobId: number;data: BodyType<JobAssignmentInput>}> = (props) => {
+          const {jobId,data} = props ?? {};
+
+          return  assignEmployeeToJob(jobId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AssignEmployeeToJobMutationResult = NonNullable<Awaited<ReturnType<typeof assignEmployeeToJob>>>
+    export type AssignEmployeeToJobMutationBody = BodyType<JobAssignmentInput>
+    export type AssignEmployeeToJobMutationError = ErrorType<unknown>
+
+    export const useAssignEmployeeToJob = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignEmployeeToJob>>, TError,{jobId: number;data: BodyType<JobAssignmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof assignEmployeeToJob>>,
+        TError,
+        {jobId: number;data: BodyType<JobAssignmentInput>},
+        TContext
+      > => {
+      return useMutation(getAssignEmployeeToJobMutationOptions(options));
     }
 
 export const getSendJobMessageUrl = (id: number,) => {
