@@ -13,5 +13,10 @@ export interface JobUpdate {
   endTime?: string;
   status?: JobUpdateStatus;
   notes?: string;
+  serviceVariant?: string;
+  addOns?: string[];
+  /** @minimum 0 */
+  durationMinutes?: number;
+  frequency?: string;
   teamMemberIds?: number[];
 }

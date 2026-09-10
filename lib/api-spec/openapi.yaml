@@ -283,6 +283,16 @@ components:
           enum: [scheduled, in_progress, completed, attention]
         serviceType:
           type: string
+        serviceVariant:
+          type: ["string", "null"]
+        addOns:
+          type: array
+          items:
+            type: string
+        durationMinutes:
+          type: ["integer", "null"]
+        frequency:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
         team:
@@ -321,6 +331,17 @@ components:
           type: string
         serviceType:
           type: string
+        serviceVariant:
+          type: string
+        addOns:
+          type: array
+          items:
+            type: string
+        durationMinutes:
+          type: integer
+          minimum: 0
+        frequency:
+          type: string
         notes:
           type: string
         clientPhone:
@@ -343,6 +364,17 @@ components:
           type: string
           enum: [scheduled, in_progress, completed, attention]
         notes:
+          type: string
+        serviceVariant:
+          type: string
+        addOns:
+          type: array
+          items:
+            type: string
+        durationMinutes:
+          type: integer
+          minimum: 0
+        frequency:
           type: string
         teamMemberIds:
           type: array

@@ -20,6 +20,13 @@ export interface Job {
   status: JobStatus;
   serviceType: string;
   /** @nullable */
+  serviceVariant?: string | null;
+  addOns?: string[];
+  /** @nullable */
+  durationMinutes?: number | null;
+  /** @nullable */
+  frequency?: string | null;
+  /** @nullable */
   notes?: string | null;
   team: TeamMember[];
   checklist: ChecklistItem[];

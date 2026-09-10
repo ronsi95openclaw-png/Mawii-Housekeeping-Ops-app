@@ -60,6 +60,13 @@ export interface Job {
   status: JobStatus;
   serviceType: string;
   /** @nullable */
+  serviceVariant?: string | null;
+  addOns?: string[];
+  /** @nullable */
+  durationMinutes?: number | null;
+  /** @nullable */
+  frequency?: string | null;
+  /** @nullable */
   notes?: string | null;
   team: TeamMember[];
   checklist: ChecklistItem[];
@@ -107,6 +114,11 @@ export interface JobInput {
   startTime: string;
   endTime: string;
   serviceType: string;
+  serviceVariant?: string;
+  addOns?: string[];
+  /** @minimum 0 */
+  durationMinutes?: number;
+  frequency?: string;
   notes?: string;
   clientPhone?: string;
   teamMemberIds?: number[];
@@ -128,6 +140,11 @@ export interface JobUpdate {
   endTime?: string;
   status?: JobUpdateStatus;
   notes?: string;
+  serviceVariant?: string;
+  addOns?: string[];
+  /** @minimum 0 */
+  durationMinutes?: number;
+  frequency?: string;
   teamMemberIds?: number[];
 }
 

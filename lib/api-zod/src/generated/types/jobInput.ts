@@ -15,6 +15,11 @@ export interface JobInput {
   startTime: string;
   endTime: string;
   serviceType: string;
+  serviceVariant?: string;
+  addOns?: string[];
+  /** @minimum 0 */
+  durationMinutes?: number;
+  frequency?: string;
   notes?: string;
   clientPhone?: string;
   teamMemberIds?: number[];

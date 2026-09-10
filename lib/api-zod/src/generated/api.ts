@@ -34,6 +34,10 @@ export const GetDashboardSummaryResponse = zod.object({
   "endTime": zod.string(),
   "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']),
   "serviceType": zod.string(),
+  "serviceVariant": zod.string().nullish(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().nullish(),
+  "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
@@ -92,6 +96,10 @@ export const ListJobsResponseItem = zod.object({
   "endTime": zod.string(),
   "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']),
   "serviceType": zod.string(),
+  "serviceVariant": zod.string().nullish(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().nullish(),
+  "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
@@ -123,6 +131,8 @@ export const ListJobsResponse = zod.array(ListJobsResponseItem)
  */
 
 
+export const createJobBodyDurationMinutesMin = 0;
+
 
 
 export const CreateJobBody = zod.object({
@@ -132,6 +142,10 @@ export const CreateJobBody = zod.object({
   "startTime": zod.string(),
   "endTime": zod.string(),
   "serviceType": zod.string(),
+  "serviceVariant": zod.string().optional(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().min(createJobBodyDurationMinutesMin).optional(),
+  "frequency": zod.string().optional(),
   "notes": zod.string().optional(),
   "clientPhone": zod.string().optional(),
   "teamMemberIds": zod.array(zod.number().int()).optional()
@@ -146,6 +160,10 @@ export const CreateJobResponse = zod.object({
   "endTime": zod.string(),
   "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']),
   "serviceType": zod.string(),
+  "serviceVariant": zod.string().nullish(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().nullish(),
+  "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
@@ -187,6 +205,10 @@ export const GetJobResponse = zod.object({
   "endTime": zod.string(),
   "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']),
   "serviceType": zod.string(),
+  "serviceVariant": zod.string().nullish(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().nullish(),
+  "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
@@ -219,12 +241,20 @@ export const UpdateJobParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const updateJobBodyDurationMinutesMin = 0;
+
+
+
 export const UpdateJobBody = zod.object({
   "scheduledDate": zod.coerce.date().optional(),
   "startTime": zod.string().optional(),
   "endTime": zod.string().optional(),
   "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']).optional(),
   "notes": zod.string().optional(),
+  "serviceVariant": zod.string().optional(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().min(updateJobBodyDurationMinutesMin).optional(),
+  "frequency": zod.string().optional(),
   "teamMemberIds": zod.array(zod.number().int()).optional()
 })
 
@@ -237,6 +267,10 @@ export const UpdateJobResponse = zod.object({
   "endTime": zod.string(),
   "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']),
   "serviceType": zod.string(),
+  "serviceVariant": zod.string().nullish(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().nullish(),
+  "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
@@ -283,6 +317,10 @@ export const UpdateJobChecklistResponse = zod.object({
   "endTime": zod.string(),
   "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']),
   "serviceType": zod.string(),
+  "serviceVariant": zod.string().nullish(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().nullish(),
+  "frequency": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "team": zod.array(zod.object({
   "id": zod.number().int(),
