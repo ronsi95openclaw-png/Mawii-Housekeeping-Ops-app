@@ -404,6 +404,40 @@ export interface Employee {
   phone?: string | null;
 }
 
+export type EmployeeInputRole = typeof EmployeeInputRole[keyof typeof EmployeeInputRole];
+
+
+export const EmployeeInputRole = {
+  owner: 'owner',
+  manager: 'manager',
+  cleaner: 'cleaner',
+} as const;
+
+export interface EmployeeInput {
+  name: string;
+  clerkUserId?: string;
+  role?: EmployeeInputRole;
+  phone?: string;
+  active?: string;
+}
+
+export type EmployeeUpdateRole = typeof EmployeeUpdateRole[keyof typeof EmployeeUpdateRole];
+
+
+export const EmployeeUpdateRole = {
+  owner: 'owner',
+  manager: 'manager',
+  cleaner: 'cleaner',
+} as const;
+
+export interface EmployeeUpdate {
+  name?: string;
+  clerkUserId?: string;
+  role?: EmployeeUpdateRole;
+  phone?: string;
+  active?: string;
+}
+
 export interface JobAssignment {
   id: number;
   jobId: number;
@@ -430,6 +464,10 @@ export interface BreakInput {
 
 export interface TimeCorrectionInput {
   minutes: number;
+  reason: string;
+}
+
+export interface CorrectionRejection {
   reason: string;
 }
 
@@ -464,6 +502,19 @@ export interface ProofPhotoInput {
   objectPath: string;
   contentType?: string;
   byteSize?: number;
+}
+
+export interface JobNote {
+  id: number;
+  jobId: number;
+  employeeId: number;
+  body: string;
+  createdAt: string;
+}
+
+export interface JobNoteInput {
+  /** @minLength 1 */
+  body: string;
 }
 
 export interface Incident {
@@ -565,6 +616,34 @@ export interface MessageRecord {
   createdAt: string;
 }
 
+export type PayPeriodStatus = typeof PayPeriodStatus[keyof typeof PayPeriodStatus];
+
+
+export const PayPeriodStatus = {
+  draft: 'draft',
+  approved: 'approved',
+  paid: 'paid',
+} as const;
+
+export interface PayPeriod {
+  id: number;
+  startsOn: string;
+  endsOn: string;
+  status: PayPeriodStatus;
+}
+
+export interface PayPeriodInput {
+  startsOn: string;
+  endsOn: string;
+}
+
+export interface PayoutAdjustment {
+  employeeId: number;
+  amount: string;
+  reason: string;
+  createdAt?: string;
+}
+
 export type ListJobsParams = {
 startDate?: string;
 endDate?: string;
@@ -604,4 +683,15 @@ export type ListPayoutsParams = {
 start: string;
 end: string;
 };
+
+export type ListPayPeriods200Item = { [key: string]: unknown };
+
+export type AddPayoutAdjustment200 = { [key: string]: unknown };
+
+export type GetOwnerReportParams = {
+start: string;
+end: string;
+};
+
+export type GetOwnerReport200 = { [key: string]: unknown };
 

@@ -16,10 +16,11 @@ export function Dashboard() {
   
   const data = summary.data;
   const attention = (jobs.data || []).filter((j) => j.status === 'attention').slice(0, 3);
+  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(new Date());
   
   return (
     <div className="content-stack">
-      <PageIntro eyebrow="Monday · live board" title="The day, at a glance." body="Keep the crew moving and every handoff documented." action={<Link href="/schedule" className="button button-secondary" data-testid="link-view-schedule">Open schedule <ArrowRight size={15} /></Link>} />
+      <PageIntro eyebrow={`${weekday} · live board`} title="The day, at a glance." body="Keep the crew moving and every handoff documented." action={<Link href="/schedule" className="button button-secondary" data-testid="link-view-schedule">Open schedule <ArrowRight size={15} /></Link>} />
       
       <section className="metric-grid animate-rise delay-1">
         {[

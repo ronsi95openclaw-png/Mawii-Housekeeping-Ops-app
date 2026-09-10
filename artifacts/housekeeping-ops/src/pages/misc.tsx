@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { 
   useListActivityHistory, useListJobs, useListIncidents, useReviewIncident, 
-  useListEmployees, useCreateWorkerRate, useListPayouts, useListTimeEntries, useApproveTimeCorrection
+  useListEmployees, useCreateWorkerRate, useListPayouts, useListTimeEntries, useApproveTimeCorrection, useRejectTimeCorrection
 } from '@workspace/api-client-react';
 import { PageIntro, LoadingState, ErrorState, EmptyState, formatDate, statusTone, Badge, statusLabel, formatTime } from '@/lib/shared';
 import { AlertTriangle, Activity as ActivityIcon, ShieldCheck, Check, DollarSign, Download } from 'lucide-react';
@@ -72,11 +72,26 @@ export function Quality() {
 
 function TimeCorrectionQueue() {
   const qc = useQueryClient();
-  const timeEntries = useListTimeEntries({ status: 'pending' });
+  const timeEntries = useListTimeEntries({ status: 'pending' }, { query: { queryKey: ['timeEntries'] } });
   const approve = useApproveTimeCorrection();
+  const reject = useRejectTimeCorrection();
+  
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const handleApprove = (id: number) => {
     approve.mutate({ id }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['timeEntries'] }) });
+  };
+
+  const handleReject = (id: number) => {
+    if (!rejectReason.trim()) return;
+    reject.mutate({ id, data: { reason: rejectReason } }, { 
+      onSuccess: () => {
+        setRejectingId(null);
+        setRejectReason('');
+        void qc.invalidateQueries({ queryKey: ['timeEntries'] });
+      } 
+    });
   };
 
   return (
@@ -95,10 +110,23 @@ function TimeCorrectionQueue() {
           {timeEntries.data.map((entry) => (
             <div className="attention-row" key={entry.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'stretch' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong>{entry.correctionMinutes} mins adjustment</strong>
+                <strong>{entry.correctionMinutes! > 0 ? '+' : ''}{entry.correctionMinutes} mins adjustment</strong>
+                <Badge tone="orange">Pending</Badge>
               </div>
-              <p style={{ margin: 0 }}>Job #{entry.jobId} · {formatDate(entry.clockIn, { hour: 'numeric', minute: '2-digit' })}</p>
-              <button className="button button-primary" style={{ alignSelf: 'flex-start', marginTop: '4px', height: '26px' }} onClick={() => handleApprove(entry.id)} disabled={approve.isPending}>Approve</button>
+              <p style={{ margin: 0 }}>Worker #{entry.employeeId} on Job #{entry.jobId} · {formatDate(entry.clockIn, { hour: 'numeric', minute: '2-digit' })}</p>
+              
+              {rejectingId === entry.id ? (
+                <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                  <input type="text" placeholder="Reason..." value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} style={{ flex: 1, padding: '4px', fontSize: '10px' }} />
+                  <button className="button button-primary" style={{ height: '26px' }} onClick={() => handleReject(entry.id)} disabled={!rejectReason.trim() || reject.isPending}>Confirm</button>
+                  <button className="button button-secondary" style={{ height: '26px' }} onClick={() => setRejectingId(null)}>Cancel</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <button className="button button-primary" style={{ height: '26px' }} onClick={() => handleApprove(entry.id)} disabled={approve.isPending || reject.isPending}>Approve</button>
+                  <button className="button button-secondary" style={{ height: '26px' }} onClick={() => setRejectingId(entry.id)} disabled={approve.isPending || reject.isPending}>Reject</button>
+                </div>
+              )}
             </div>
           ))}
         </div>

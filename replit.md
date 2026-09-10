@@ -40,6 +40,8 @@ An operations desk for coordinating housekeeping jobs, crew assignments, reminde
 
 Housekeeping Ops gives owners a live overview of today’s work, a visual week schedule, searchable jobs, a team roster, checklist closeout, proof-photo display, and job-level client messaging. It is designed for the two-person operations desk that receives jobs from Elevate OS and dispatches the field team.
 
+MAWII is a single-company internal operations app for Mawii Property Care only. It is not SaaS, multi-tenant, for resale, or for rental to other companies. Do not add subscriptions, tenant isolation, public signup, customer billing, usage metering, organization switching, SaaS onboarding, or a customer portal without explicit instruction.
+
 ## User preferences
 
 _Populate as you build — explicit user instructions worth remembering across sessions._

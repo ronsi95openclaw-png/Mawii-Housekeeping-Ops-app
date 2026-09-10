@@ -40,6 +40,9 @@ export const jobsTable = pgTable("jobs", {
   teamMemberIds: integer("team_member_ids").array().notNull().default([]),
   checklist: jsonb("checklist").$type<{ id: number; label: string; completed: boolean }[]>().notNull().default([]),
   photos: jsonb("photos").$type<{ id: number; url: string; label: string; createdAt: string }[]>().notNull().default([]),
+  accessInstructions: text("access_instructions"),
+  completedByEmployeeId: integer("completed_by_employee_id"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

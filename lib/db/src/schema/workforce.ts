@@ -12,6 +12,14 @@ export const employeesTable = pgTable("employees", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const employeeJobNotesTable = pgTable("employee_job_notes", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const jobAssignmentsTable = pgTable("job_assignments", {
   id: serial("id").primaryKey(),
   jobId: integer("job_id").notNull(),

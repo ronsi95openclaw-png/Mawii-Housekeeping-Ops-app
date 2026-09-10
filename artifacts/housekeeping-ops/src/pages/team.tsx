@@ -1,85 +1,128 @@
 import { useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useListTeam, useCreateTeamMember, getListTeamQueryKey } from '@workspace/api-client-react';
-import { Plus, X, Phone, MessageSquare } from 'lucide-react';
-import { LoadingState, ErrorState, EmptyState, PageIntro, Avatar, Badge, statusTone, statusLabel, whatsappUrl } from '@/lib/shared';
+import { 
+  useListEmployees, useCreateEmployee, useUpdateEmployee,
+  getListEmployeesQueryKey, useListTeam
+} from '@workspace/api-client-react';
+import type { Employee, EmployeeInputRole } from '@workspace/api-client-react';
+import { Plus, X, Phone, Edit2, ShieldAlert } from 'lucide-react';
+import { LoadingState, ErrorState, EmptyState, PageIntro, Avatar, Badge } from '@/lib/shared';
 
 export function Team() {
-  const team = useListTeam();
-  const create = useCreateTeamMember();
+  const employees = useListEmployees();
+  const create = useCreateEmployee();
+  const update = useUpdateEmployee();
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
+  const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
   
-  const available = (team.data || []).filter((m) => m.status === 'available').length;
+  const legacyTeam = useListTeam();
+
+  if (employees.isLoading) return <LoadingState label="Loading the crew" />;
+  if (employees.isError) return <ErrorState onRetry={() => void employees.refetch()} />;
   
-  if (team.isLoading) return <LoadingState label="Loading the crew" />;
-  if (team.isError) return <ErrorState onRetry={() => void team.refetch()} />;
-  
-  const submit = (data: { name: string; role: string; phone: string }) => {
-    create.mutate({ data }, { onSuccess: () => { setShowAdd(false); void queryClient.invalidateQueries({ queryKey: getListTeamQueryKey() }); } });
+  const submitCreate = (data: any) => {
+    create.mutate({ data }, { onSuccess: () => { setShowAdd(false); void queryClient.invalidateQueries({ queryKey: getListEmployeesQueryKey() }); } });
+  };
+
+  const submitEdit = (data: any) => {
+    if (!editEmployee) return;
+    update.mutate({ id: editEmployee.id, data }, { onSuccess: () => { setEditEmployee(null); void queryClient.invalidateQueries({ queryKey: getListEmployeesQueryKey() }); } });
   };
   
   return (
     <div className="content-stack">
-      <PageIntro eyebrow="People on the ground" title="Team" body="Know who is ready, assigned, and taking a well-earned day off." action={<button className="button button-primary" onClick={() => setShowAdd(true)} data-testid="button-add-team-member"><Plus size={16} />Add teammate</button>} />
+      <PageIntro eyebrow="System access & roles" title="Team & Employees" body="Manage user access, roles, and cleaner profiles." action={<button className="button button-primary" onClick={() => setShowAdd(true)} data-testid="button-add-team-member"><Plus size={16} />Add user</button>} />
       
-      <section className="team-summary">
-        <div className="team-summary-copy">
-          <span className="eyebrow">Crew pulse</span>
-          <strong>{available} ready to work</strong>
-          <span>{(team.data || []).length} people in your roster</span>
-        </div>
-        <div className="availability-bars">
-          {(team.data || []).map((member) => <span key={member.id} className={`availability-bar ${member.status}`} title={`${member.name}: ${member.status}`} />)}
-        </div>
-      </section>
-      
-      {team.data?.length ? (
+      {employees.data?.length ? (
         <div className="team-grid">
-          {team.data.map((member) => (
-            <article className="panel team-card" key={member.id} data-testid={`team-card-${member.id}`}>
+          {employees.data.map((emp) => (
+            <article className="panel team-card" key={emp.id} data-testid={`team-card-${emp.id}`}>
               <div className="team-card-head">
-                <Avatar member={member} size="lg" />
-                <Badge tone={statusTone(member.status)}>{statusLabel(member.status)}</Badge>
+                <Avatar member={{ name: emp.name }} size="lg" />
+                <Badge tone={emp.role === 'owner' ? 'red' : emp.role === 'manager' ? 'orange' : 'green'}>{emp.role}</Badge>
               </div>
-              <h3>{member.name}</h3>
-              <span className="team-role">{member.role}</span>
+              <h3>{emp.name}</h3>
+              <span className="team-role">{emp.clerkUserId ? 'Linked to Clerk' : 'No Clerk ID'}</span>
               <div className="team-contact">
-                <span><Phone size={14} />{member.phone}</span>
+                <span><Phone size={14} />{emp.phone || 'No phone'}</span>
                 <div className="team-actions">
-                  <a href={whatsappUrl(member.phone)} target="_blank" rel="noreferrer" className="button button-secondary" data-testid={`button-whatsapp-member-${member.id}`}><MessageSquare size={14} />WhatsApp</a>
-                  <a href={`tel:${member.phone}`} className="button button-secondary" data-testid={`button-call-member-${member.id}`}><Phone size={14} />Call</a>
+                  <button className="button button-secondary" onClick={() => setEditEmployee(emp)}><Edit2 size={14} />Edit</button>
+                  {emp.phone && <a href={`tel:${emp.phone}`} className="button button-secondary"><Phone size={14} />Call</a>}
                 </div>
               </div>
             </article>
           ))}
         </div>
       ) : (
-        <EmptyState title="Your roster is empty" body="Add your first teammate to start assigning work." action={<button className="button button-primary" onClick={() => setShowAdd(true)} data-testid="button-add-first-team-member"><Plus size={15} />Add teammate</button>} />
+        <EmptyState title="No employees found" body="Add your first employee to grant them access." action={<button className="button button-primary" onClick={() => setShowAdd(true)} data-testid="button-add-first-team-member"><Plus size={15} />Add user</button>} />
       )}
+
+      {legacyTeam.data?.length ? (
+        <section className="panel" style={{ marginTop: '32px' }}>
+          <div className="section-heading">
+            <div><span className="eyebrow">Legacy</span><h3>Legacy scheduling contacts</h3></div>
+            <ShieldAlert size={20} className="muted-icon" />
+          </div>
+          <p className="muted-copy" style={{ marginTop: '8px', fontSize: '11px' }}>Legacy contacts are preserved here to avoid breaking old records.</p>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '16px' }}>
+            {legacyTeam.data.map(m => (
+              <Badge key={m.id} tone="neutral">{m.name}</Badge>
+            ))}
+          </div>
+        </section>
+      ) : null}
       
-      {showAdd && <AddTeamDialog pending={create.isPending} onClose={() => setShowAdd(false)} onSubmit={submit} />}
+      {showAdd && <EmployeeDialog pending={create.isPending} onClose={() => setShowAdd(false)} onSubmit={submitCreate} />}
+      {editEmployee && (
+        <EmployeeDialog 
+          pending={update.isPending} 
+          initialData={editEmployee} 
+          onClose={() => setEditEmployee(null)} 
+          onSubmit={submitEdit} 
+        />
+      )}
     </div>
   );
 }
 
-function AddTeamDialog({ onClose, onSubmit, pending }: { onClose: () => void; onSubmit: (data: { name: string; role: string; phone: string }) => void; pending: boolean }) {
-  const [form, setForm] = useState({ name: '', role: '', phone: '' });
+function EmployeeDialog({ onClose, onSubmit, pending, initialData }: { onClose: () => void; onSubmit: (data: any) => void; pending: boolean; initialData?: Employee }) {
+  const [form, setForm] = useState({
+    name: initialData?.name || '',
+    clerkUserId: initialData?.clerkUserId || '',
+    role: initialData?.role || 'cleaner',
+    phone: initialData?.phone || '',
+    active: 'true'
+  });
+  
   return (
     <div className="modal-scrim">
       <form className="modal panel small-modal" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(form); }}>
         <div className="modal-head">
-          <div><span className="eyebrow">Crew roster</span><h3>Add teammate</h3></div>
+          <div><span className="eyebrow">System User</span><h3>{initialData ? 'Edit Employee' : 'Add Employee'}</h3></div>
           <button type="button" className="icon-button" onClick={onClose} data-testid="button-close-add-team"><X size={17} /></button>
         </div>
         <div className="form-stack">
           <label>Full name<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="input-team-name" /></label>
-          <label>Role<input required placeholder="Lead cleaner" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} data-testid="input-team-role" /></label>
-          <label>Phone<input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="input-team-phone" /></label>
+          <label>Clerk User ID (for auth linkage)<input value={form.clerkUserId} onChange={(e) => setForm({ ...form, clerkUserId: e.target.value })} placeholder="user_2X..." /></label>
+          <label>System Role
+            <select required value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as EmployeeInputRole })}>
+              <option value="owner">Owner</option>
+              <option value="manager">Manager</option>
+              <option value="cleaner">Cleaner</option>
+            </select>
+          </label>
+          <label>Phone<input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="input-team-phone" /></label>
+          <label>Active
+            <select required value={form.active} onChange={(e) => setForm({ ...form, active: e.target.value })}>
+              <option value="true">Active (Has access)</option>
+              <option value="false">Inactive (Revoked)</option>
+            </select>
+          </label>
         </div>
         <div className="modal-actions">
           <button type="button" className="button button-secondary" onClick={onClose} data-testid="button-cancel-add-team">Cancel</button>
-          <button className="button button-primary" disabled={pending} data-testid="button-submit-add-team">{pending ? 'Adding…' : 'Add to roster'}</button>
+          <button className="button button-primary" disabled={pending} data-testid="button-submit-add-team">{pending ? 'Saving…' : 'Save Employee'}</button>
         </div>
       </form>
     </div>

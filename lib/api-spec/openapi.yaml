@@ -319,6 +319,18 @@ paths:
       operationId: listEmployees
       tags: [field-ops]
       responses: { "200": { description: Employees, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Employee" } } } } } }
+    post:
+      operationId: createEmployee
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/EmployeeInput" } } } }
+      responses: { "201": { description: Employee, content: { application/json: { schema: { $ref: "#/components/schemas/Employee" } } } } }
+  /employees/{id}:
+    patch:
+      operationId: updateEmployee
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/EmployeeUpdate" } } } }
+      responses: { "200": { description: Employee, content: { application/json: { schema: { $ref: "#/components/schemas/Employee" } } } } }
   /jobs/assigned:
     get:
       operationId: listAssignedJobs
@@ -364,6 +376,13 @@ paths:
       tags: [field-ops]
       parameters: [{ $ref: "#/components/parameters/Id" }]
       responses: { "200": { description: Time entry, content: { application/json: { schema: { $ref: "#/components/schemas/TimeEntry" } } } } }
+  /time-entries/{id}/reject:
+    post:
+      operationId: rejectTimeCorrection
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CorrectionRejection" } } } }
+      responses: { "200": { description: Time entry, content: { application/json: { schema: { $ref: "#/components/schemas/TimeEntry" } } } } }
   /time-entries/active:
     get:
       operationId: getActiveTimeEntries
@@ -387,6 +406,19 @@ paths:
       tags: [field-ops]
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ProofPhotoInput" } } } }
       responses: { "201": { description: Photo, content: { application/json: { schema: { $ref: "#/components/schemas/ProofPhoto" } } } } }
+  /jobs/{jobId}/notes:
+    post:
+      operationId: addEmployeeJobNote
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/JobId" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JobNoteInput" } } } }
+      responses: { "201": { description: Note, content: { application/json: { schema: { $ref: "#/components/schemas/JobNote" } } } } }
+  /jobs/{jobId}/complete:
+    post:
+      operationId: completeAssignedJob
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/JobId" }]
+      responses: { "200": { description: Completed job, content: { application/json: { schema: { $ref: "#/components/schemas/Job" } } } } }
   /jobs/{jobId}/incidents:
     post:
       operationId: createIncident
@@ -432,6 +464,43 @@ paths:
       tags: [field-ops]
       parameters: [{ $ref: "#/components/parameters/JobId" }]
       responses: { "200": { description: Messages, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MessageRecord" } } } } } }
+  /pay-periods:
+    get:
+      operationId: listPayPeriods
+      tags: [field-ops]
+      responses: { "200": { description: Pay periods, content: { application/json: { schema: { type: array, items: { type: object } } } } } }
+    post:
+      operationId: createPayPeriod
+      tags: [field-ops]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PayPeriodInput" } } } }
+      responses: { "201": { description: Pay period, content: { application/json: { schema: { $ref: "#/components/schemas/PayPeriod" } } } } }
+  /pay-periods/{id}/approve:
+    post:
+      operationId: approvePayPeriod
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses: { "200": { description: Approved period, content: { application/json: { schema: { $ref: "#/components/schemas/PayPeriod" } } } } }
+  /pay-periods/{id}/paid:
+    post:
+      operationId: markPayPeriodPaid
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses: { "200": { description: Paid period, content: { application/json: { schema: { $ref: "#/components/schemas/PayPeriod" } } } } }
+  /pay-periods/{id}/adjustments:
+    post:
+      operationId: addPayoutAdjustment
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutAdjustment" } } } }
+      responses: { "200": { description: Payout, content: { application/json: { schema: { type: object } } } } }
+  /reports/owner:
+    get:
+      operationId: getOwnerReport
+      tags: [field-ops]
+      parameters:
+        - { name: start, in: query, required: true, schema: { type: string, format: date } }
+        - { name: end, in: query, required: true, schema: { type: string, format: date } }
+      responses: { "200": { description: Owner report, content: { application/json: { schema: { type: object } } } } }
 components:
   parameters:
     Id:
@@ -854,6 +923,23 @@ components:
         name: { type: string }
         role: { type: string, enum: [owner, manager, cleaner] }
         phone: { type: ["string", "null"] }
+    EmployeeInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        clerkUserId: { type: string }
+        role: { type: string, enum: [owner, manager, cleaner] }
+        phone: { type: string }
+        active: { type: string }
+    EmployeeUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        clerkUserId: { type: string }
+        role: { type: string, enum: [owner, manager, cleaner] }
+        phone: { type: string }
+        active: { type: string }
     JobAssignment:
       type: object
       required: [id, jobId, employeeId, status]
@@ -882,6 +968,10 @@ components:
       type: object
       required: [minutes, reason]
       properties: { minutes: { type: integer }, reason: { type: string } }
+    CorrectionRejection:
+      type: object
+      required: [reason]
+      properties: { reason: { type: string } }
     ProofPhoto:
       type: object
       required: [id, jobId, kind, objectPath, contentType]
@@ -900,6 +990,19 @@ components:
         objectPath: { type: string }
         contentType: { type: string }
         byteSize: { type: integer }
+    JobNote:
+      type: object
+      required: [id, jobId, employeeId, body, createdAt]
+      properties:
+        id: { type: integer }
+        jobId: { type: integer }
+        employeeId: { type: integer }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+    JobNoteInput:
+      type: object
+      required: [body]
+      properties: { body: { type: string, minLength: 1 } }
     Incident:
       type: object
       required: [id, jobId, type, description, status]
@@ -971,5 +1074,27 @@ components:
         failureReason: { type: ["string", "null"] }
         metadata: { type: object }
         actorClerkUserId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    PayPeriod:
+      type: object
+      required: [id, startsOn, endsOn, status]
+      properties:
+        id: { type: integer }
+        startsOn: { type: string, format: date }
+        endsOn: { type: string, format: date }
+        status: { type: string, enum: [draft, approved, paid] }
+    PayPeriodInput:
+      type: object
+      required: [startsOn, endsOn]
+      properties:
+        startsOn: { type: string, format: date }
+        endsOn: { type: string, format: date }
+    PayoutAdjustment:
+      type: object
+      required: [employeeId, amount, reason]
+      properties:
+        employeeId: { type: integer }
+        amount: { type: string }
+        reason: { type: string }
         createdAt: { type: string, format: date-time }
 

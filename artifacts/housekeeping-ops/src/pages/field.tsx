@@ -10,11 +10,12 @@ import {
   useGetJob,
   getGetJobQueryKey,
   useGetActiveTimeEntries,
-  useListProofPhotos
+  useListProofPhotos,
+  useCompleteAssignedJob
 } from '@workspace/api-client-react';
 import type { Job, JobAssignment } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { MapPin, Clock3, Check, Camera, Coffee, AlertTriangle, ChevronRight, X, Image as ImageIcon } from 'lucide-react';
+import { MapPin, Clock3, Check, Camera, Coffee, AlertTriangle, ChevronRight, X, Image as ImageIcon, Map as MapIcon } from 'lucide-react';
 import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, formatDate, formatTime, statusTone, statusLabel } from '@/lib/shared';
 
 function FieldJobRow({ assignment, onSelect }: { assignment: JobAssignment; onSelect: (jobId: number, assignmentId: number) => void }) {
@@ -82,6 +83,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
   const registerPhoto = useRegisterProofPhoto();
   const respond = useRespondToAssignment();
   const reportIncident = useCreateIncident();
+  const completeJob = useCompleteAssignedJob();
   
   const photos = useListProofPhotos(jobId, { query: { enabled: !!jobId, queryKey: ['proofPhotos', jobId] } });
 
@@ -124,6 +126,19 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
     reportIncident.mutate({ jobId, data: { description: incidentText } }, { onSuccess: () => setIncidentText('') });
   };
 
+  const isChecklistComplete = !job.checklist?.some(i => !i.completed);
+  const hasBefore = photos.data?.some(p => p.kind === 'before');
+  const hasAfter = photos.data?.some(p => p.kind === 'after');
+  const canComplete = isChecklistComplete && hasBefore && hasAfter;
+
+  const handleComplete = () => {
+    if (!canComplete) return;
+    completeJob.mutate({ jobId }, { onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: getGetJobQueryKey(jobId) });
+      void qc.invalidateQueries({ queryKey: getListAssignedJobsQueryKey() });
+    }});
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, kind: 'before' | 'after') => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -163,7 +178,17 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
         <div className="detail-top">
           <div>
             <h2>{job.clientName}</h2>
-            <p><MapPin size={14} />{job.address}</p>
+            <p>
+              <MapPin size={14} />{job.address}
+            </p>
+            <a 
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}`} 
+              target="_blank" 
+              rel="noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: 'hsl(var(--primary))', marginTop: '4px', textDecoration: 'none' }}
+            >
+              <MapIcon size={12} /> Get Directions
+            </a>
           </div>
           <Badge tone={statusTone(job.status)}>{statusLabel(job.status)}</Badge>
         </div>
@@ -175,7 +200,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
 
         {job.notes && (
           <div className="message-box" style={{ marginBottom: '16px', background: 'hsl(var(--secondary))' }}>
-            <strong>Notes</strong>
+            <strong>Access & cleaner notes</strong>
             <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>{job.notes}</p>
           </div>
         )}
@@ -257,6 +282,27 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
           ) : (
             <div className="proof-empty"><ImageIcon size={17} /><span>Take photos before and after service.</span></div>
           )}
+        </div>
+
+        <div className="detail-section" style={{ padding: '16px', background: 'hsl(var(--secondary))', borderRadius: '8px', marginBottom: '24px' }}>
+          <div style={{ marginBottom: '12px' }}>
+            <strong>Complete Assignment</strong>
+          </div>
+          {!canComplete && (
+            <div style={{ fontSize: '11px', color: 'hsl(var(--destructive))', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {!isChecklistComplete && <span>• Complete all checklist items</span>}
+              {!hasBefore && <span>• Upload at least one Before photo</span>}
+              {!hasAfter && <span>• Upload at least one After photo</span>}
+            </div>
+          )}
+          <button 
+            className="button button-primary" 
+            style={{ width: '100%', height: '36px' }} 
+            disabled={!canComplete || completeJob.isPending || job.status === 'completed'}
+            onClick={handleComplete}
+          >
+            {job.status === 'completed' ? 'Job Completed' : completeJob.isPending ? 'Completing...' : 'Complete Job'}
+          </button>
         </div>
 
         <div className="detail-section" style={{ borderBottom: 0 }}>

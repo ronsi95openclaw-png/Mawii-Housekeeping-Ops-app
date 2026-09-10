@@ -704,6 +704,44 @@ export const ListEmployeesResponseItem = zod.object({
 export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem)
 
 
+export const CreateEmployeeBody = zod.object({
+  "name": zod.string(),
+  "clerkUserId": zod.string().optional(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']).optional(),
+  "phone": zod.string().optional(),
+  "active": zod.string().optional()
+})
+
+export const CreateEmployeeResponse = zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish()
+})
+
+
+export const UpdateEmployeeParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateEmployeeBody = zod.object({
+  "name": zod.string().optional(),
+  "clerkUserId": zod.string().optional(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']).optional(),
+  "phone": zod.string().optional(),
+  "active": zod.string().optional()
+})
+
+export const UpdateEmployeeResponse = zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish()
+})
+
+
 export const ListAssignedJobsResponseItem = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
@@ -819,6 +857,26 @@ export const ApproveTimeCorrectionResponse = zod.object({
 })
 
 
+export const RejectTimeCorrectionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const RejectTimeCorrectionBody = zod.object({
+  "reason": zod.string()
+})
+
+export const RejectTimeCorrectionResponse = zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "clockIn": zod.coerce.date(),
+  "clockOut": zod.coerce.date().nullish(),
+  "breaksMinutes": zod.number().int().optional(),
+  "correctionMinutes": zod.number().int().optional(),
+  "correctionStatus": zod.string().optional()
+})
+
+
 export const GetActiveTimeEntriesQueryParams = zod.object({
   "jobId": zod.coerce.number().int().optional()
 })
@@ -886,6 +944,68 @@ export const RegisterProofPhotoResponse = zod.object({
   "objectPath": zod.string(),
   "contentType": zod.string(),
   "byteSize": zod.number().int().nullish()
+})
+
+
+export const AddEmployeeJobNoteParams = zod.object({
+  "jobId": zod.coerce.number().int()
+})
+
+
+
+
+export const AddEmployeeJobNoteBody = zod.object({
+  "body": zod.string().min(1)
+})
+
+export const AddEmployeeJobNoteResponse = zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const CompleteAssignedJobParams = zod.object({
+  "jobId": zod.coerce.number().int()
+})
+
+export const CompleteAssignedJobResponse = zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']),
+  "serviceType": zod.string(),
+  "serviceVariant": zod.string().nullish(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().nullish(),
+  "frequency": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "team": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "role": zod.string(),
+  "phone": zod.string(),
+  "status": zod.enum(['available', 'assigned', 'off']),
+  "initials": zod.string().optional()
+})),
+  "checklist": zod.array(zod.object({
+  "id": zod.number().int(),
+  "label": zod.string(),
+  "completed": zod.boolean()
+})),
+  "photos": zod.array(zod.object({
+  "id": zod.number().int(),
+  "url": zod.string().url(),
+  "label": zod.string(),
+  "createdAt": zod.coerce.date()
+})).optional(),
+  "clientPhone": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
 })
 
 
@@ -1008,5 +1128,74 @@ export const ListJobMessagesResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListJobMessagesResponse = zod.array(ListJobMessagesResponseItem)
+
+
+export const ListPayPeriodsResponseItem = zod.object({
+
+}).passthrough()
+export const ListPayPeriodsResponse = zod.array(ListPayPeriodsResponseItem)
+
+
+export const CreatePayPeriodBody = zod.object({
+  "startsOn": zod.coerce.date(),
+  "endsOn": zod.coerce.date()
+})
+
+export const CreatePayPeriodResponse = zod.object({
+  "id": zod.number().int(),
+  "startsOn": zod.coerce.date(),
+  "endsOn": zod.coerce.date(),
+  "status": zod.enum(['draft', 'approved', 'paid'])
+})
+
+
+export const ApprovePayPeriodParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ApprovePayPeriodResponse = zod.object({
+  "id": zod.number().int(),
+  "startsOn": zod.coerce.date(),
+  "endsOn": zod.coerce.date(),
+  "status": zod.enum(['draft', 'approved', 'paid'])
+})
+
+
+export const MarkPayPeriodPaidParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const MarkPayPeriodPaidResponse = zod.object({
+  "id": zod.number().int(),
+  "startsOn": zod.coerce.date(),
+  "endsOn": zod.coerce.date(),
+  "status": zod.enum(['draft', 'approved', 'paid'])
+})
+
+
+export const AddPayoutAdjustmentParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const AddPayoutAdjustmentBody = zod.object({
+  "employeeId": zod.number().int(),
+  "amount": zod.string(),
+  "reason": zod.string(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+export const AddPayoutAdjustmentResponse = zod.object({
+
+}).passthrough()
+
+
+export const GetOwnerReportQueryParams = zod.object({
+  "start": zod.date(),
+  "end": zod.date()
+})
+
+export const GetOwnerReportResponse = zod.object({
+
+}).passthrough()
 
 

@@ -4,11 +4,18 @@ import { calculateWorkedMinutes, calculatePayoutCents } from "./time-entries";
 import { canManageOperations, canAccessAssignedJob } from "./authorization";
 import { payoutCsv, summarizeApprovedPayouts } from "./payouts";
 import { normalizeMessageIntent } from "./messages";
+import { hasRole } from "./authorization";
 
 describe("field operations services", () => {
   it("generates weekly and monthly occurrences", () => {
     expect(generateOccurrences("2026-01-05", { frequency: "weekly" }, 3)).toEqual(["2026-01-05", "2026-01-12", "2026-01-19"]);
     expect(generateOccurrences("2026-01-15", { frequency: "monthly" }, 2)).toEqual(["2026-01-15", "2026-02-15"]);
+  });
+  it("supports biweekly and every-N recurrence without duplicate dates", () => {
+    expect(generateOccurrences("2026-01-01", { frequency: "biweekly" }, 3)).toEqual(["2026-01-01", "2026-01-15", "2026-01-29"]);
+    const dates = generateOccurrences("2026-01-01", { frequency: "every_n_weeks", intervalWeeks: 3 }, 4);
+    expect(new Set(dates).size).toBe(4);
+    expect(dates[3]).toBe("2026-03-05");
   });
   it("subtracts breaks and applies approved correction", () => {
     expect(calculateWorkedMinutes({ clockIn: new Date("2026-01-01T09:00Z"), clockOut: new Date("2026-01-01T12:00Z"), breaksMinutes: 15, correctionMinutes: 10 })).toBe(175);
@@ -18,6 +25,7 @@ describe("field operations services", () => {
     expect(canManageOperations("manager")).toBe(true);
     expect(canAccessAssignedJob("cleaner", [3], 3)).toBe(true);
     expect(canAccessAssignedJob("cleaner", [3], 4)).toBe(false);
+    expect(hasRole("unknown", ["owner", "manager"])).toBe(false);
   });
   it("summarizes approved payout and exports CSV", () => {
     const summaries = summarizeApprovedPayouts([{ employeeId: 2, approved: true, clockIn: new Date("2026-01-01T09:00Z"), clockOut: new Date("2026-01-01T10:00Z") }], new Map([[2, 15]]));

@@ -5,7 +5,7 @@ import {
   useSkipOccurrence, useUpdateOccurrence, useListServicePlanOccurrences,
   getListServicePlansQueryKey, useListCustomers, useListCustomerAddresses
 } from '@workspace/api-client-react';
-import type { ServicePlan, Customer, Address } from '@workspace/api-client-react';
+import type { ServicePlan, Customer, Address, ServiceOccurrence } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Repeat, Plus, Pause, Play, Calendar, MapPin, X, ArrowRight, FastForward } from 'lucide-react';
 import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, formatDate, statusLabel } from '@/lib/shared';
@@ -152,6 +152,54 @@ function CreatePlanDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+function OccurrenceRow({ occ, planId, onSkip }: { occ: ServiceOccurrence; planId: number; onSkip: (id: number) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [dateStr, setDateStr] = useState(occ.occurrenceDate.split('T')[0]);
+  const updateOccurrence = useUpdateOccurrence();
+  const updatePlan = useUpdateServicePlan();
+  const queryClient = useQueryClient();
+
+  const handleSave = (scope: 'only' | 'future') => {
+    if (scope === 'only') {
+      updateOccurrence.mutate({ id: occ.id, data: { occurrenceDate: dateStr } }, { 
+        onSuccess: () => { setEditing(false); void queryClient.invalidateQueries({ queryKey: ['occurrences', planId] }); }
+      });
+    } else {
+      updatePlan.mutate({ id: planId, data: { nextOccurrence: dateStr } }, { 
+        onSuccess: () => { setEditing(false); void queryClient.invalidateQueries({ queryKey: ['occurrences', planId] }); void queryClient.invalidateQueries({ queryKey: getListServicePlansQueryKey() }); }
+      });
+    }
+  };
+
+  return (
+    <div className="check-row" style={{ display: 'flex', justifyContent: 'space-between', cursor: 'default', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+        <Calendar size={14} className="muted-icon" />
+        <input 
+          type="date" 
+          style={{ border: editing ? '1px solid hsl(var(--primary))' : '1px solid hsl(var(--border))', borderRadius: '4px', padding: '2px 4px', fontSize: '10px', width: 'auto' }} 
+          value={dateStr} 
+          onChange={(e) => { setDateStr(e.target.value); setEditing(true); }} 
+        />
+        <Badge tone={occ.status === 'skipped' ? 'neutral' : occ.status === 'completed' ? 'green' : 'orange'}>{statusLabel(occ.status)}</Badge>
+        <div style={{ marginLeft: 'auto' }}>
+          {occ.status === 'scheduled' && !editing && (
+            <button className="text-button" onClick={() => onSkip(occ.id)}>Skip</button>
+          )}
+          {occ.status === 'skipped' && !editing && <span className="muted-copy" style={{ fontSize: '9px' }}>{occ.skippedReason}</span>}
+        </div>
+      </div>
+      {editing && (
+        <div style={{ display: 'flex', gap: '4px', width: '100%', marginTop: '8px', paddingLeft: '22px' }}>
+          <button className="button button-primary" style={{ height: '24px', fontSize: '9px' }} onClick={() => handleSave('only')} disabled={updateOccurrence.isPending || updatePlan.isPending}>Change this only</button>
+          <button className="button button-secondary" style={{ height: '24px', fontSize: '9px' }} onClick={() => handleSave('future')} disabled={updateOccurrence.isPending || updatePlan.isPending}>Change this & future</button>
+          <button className="button button-secondary" style={{ height: '24px', fontSize: '9px' }} onClick={() => { setDateStr(occ.occurrenceDate.split('T')[0]); setEditing(false); }}>Cancel</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PlanDetail({ plan }: { plan: ServicePlan }) {
   const queryClient = useQueryClient();
   const pause = usePauseServicePlan();
@@ -215,17 +263,7 @@ function PlanDetail({ plan }: { plan: ServicePlan }) {
             <span className="muted-copy">No occurrences generated yet.</span>
           ) : (
             occurrences.data.map(occ => (
-              <div className="check-row" key={occ.id} style={{ display: 'flex', justifyContent: 'space-between', cursor: 'default' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Calendar size={14} className="muted-icon" />
-                  <input type="date" style={{ border: '1px solid hsl(var(--border))', borderRadius: '4px', padding: '2px 4px', fontSize: '10px', width: 'auto' }} value={occ.occurrenceDate.split('T')[0]} onChange={(e) => updateOccurrence.mutate({ id: occ.id, data: { occurrenceDate: e.target.value } }, { onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['occurrences', plan.id] }) })} />
-                  <Badge tone={occ.status === 'skipped' ? 'neutral' : occ.status === 'completed' ? 'green' : 'orange'}>{statusLabel(occ.status)}</Badge>
-                </div>
-                {occ.status === 'scheduled' && (
-                  <button className="text-button" onClick={() => handleSkip(occ.id)}>Skip</button>
-                )}
-                {occ.status === 'skipped' && <span className="muted-copy" style={{ fontSize: '9px' }}>{occ.skippedReason}</span>}
-              </div>
+              <OccurrenceRow key={occ.id} occ={occ} planId={plan.id} onSkip={handleSkip} />
             ))
           )}
         </div>
@@ -239,10 +277,11 @@ function PlanDetail({ plan }: { plan: ServicePlan }) {
           <button className="button button-secondary" onClick={handleTogglePause} disabled={pause.isPending || resume.isPending}>
             {plan.pausedAt ? <><Play size={14} /> Resume service</> : <><Pause size={14} /> Pause service</>}
           </button>
-          <button className="button button-secondary" onClick={handleGenerate} disabled={generate.isPending || !!plan.pausedAt}>
+          <button className="button button-secondary" onClick={handleGenerate} disabled={generate.isPending || !!plan.pausedAt} title="Creates real scheduled jobs on the calendar for this plan">
             <FastForward size={14} /> Generate upcoming (3)
           </button>
         </div>
+        <p className="muted-copy" style={{ marginTop: '8px', fontSize: '10px' }}>Generating upcoming occurrences will create real scheduled jobs on your calendar.</p>
       </div>
     </section>
   );

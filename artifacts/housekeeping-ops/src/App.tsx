@@ -22,7 +22,7 @@ import { Customers } from '@/pages/customers';
 import { Recurring } from '@/pages/recurring';
 import { Field } from '@/pages/field';
 import { Quality, Payouts, ActivityPage } from '@/pages/misc';
-import { SignInPage, SignUpPage } from '@/pages/auth';
+import { SignInPage } from '@/pages/auth';
 
 const queryClient = new QueryClient();
 
@@ -133,7 +133,7 @@ function Router() {
     <ErrorBoundary>
       <Switch>
         <Route path="/sign-in" component={SignInPage} />
-        <Route path="/sign-up" component={SignUpPage} />
+        <Route path="/sign-up"><Redirect to="/sign-in" /></Route>
         <Route>
           <SignedOut>
             <Redirect to="/sign-in" />
