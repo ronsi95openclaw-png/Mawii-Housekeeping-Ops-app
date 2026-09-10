@@ -22,9 +22,11 @@ export const attachAuth: RequestHandler = async (req, _res, next) => {
     }
 
     let employee = (await db.select().from(employeesTable).where(eq(employeesTable.clerkUserId, clerkUserId)))[0];
+    let isFirstUserBootstrap = false;
     if (!employee) {
       const firstEmployee = (await db.select().from(employeesTable).orderBy(asc(employeesTable.id)).limit(1))[0];
       if (!firstEmployee) {
+        isFirstUserBootstrap = true;
         [employee] = await db.insert(employeesTable).values({
           clerkUserId,
           name: "Mawii Owner",
@@ -34,7 +36,7 @@ export const attachAuth: RequestHandler = async (req, _res, next) => {
     }
 
     const developmentRole = process.env.NODE_ENV !== "production" ? req.header("x-dev-role") : undefined;
-    req.authContext = { clerkUserId, role: developmentRole ?? employee?.role };
+    req.authContext = { clerkUserId, role: employee?.role ?? (isFirstUserBootstrap ? developmentRole : undefined) };
     next();
   } catch (error) {
     next(error);

@@ -1,0 +1,432 @@
+You are continuing development of the existing MAWII Housekeeping Operations Platform.
+
+Treat the current repository and implemented features as the source of truth. Do not restart, redesign, or replace working functionality unless a verified bug requires it.
+
+PROJECT PURPOSE
+
+MAWII is an internal operations platform for one cleaning company only.
+
+It is NOT:
+
+* SaaS
+* multi-tenant
+* a product to rent or resell
+* a public customer platform
+* a public employee signup product
+
+Current team size is approximately 4–6 people.
+
+The app should stay simple, practical, mobile-friendly, and easy for non-technical owners/managers and cleaners to use.
+
+CORE OPERATING MODEL
+
+Owners/managers use MAWII as the central operations dashboard.
+
+Employees use MAWII for:
+
+* assigned jobs
+* schedule
+* job instructions
+* directions/access notes
+* clock in/out
+* time corrections
+* checklists
+* job notes
+* before/after proof photos
+* incidents
+* completion workflow
+
+Employee operational communication should remain WhatsApp-first.
+
+Customers do NOT need a portal right now.
+
+Customer communication will be SMS-first through Twilio.
+
+Twilio integration must be done LAST, after the internal workflows and testing are stable.
+
+DO NOT BUILD
+
+Do not add:
+
+* multi-tenancy
+* subscriptions
+* customer billing plans
+* SaaS onboarding
+* public signup
+* customer portal
+* public cleaner registration
+* unnecessary enterprise infrastructure
+* unrelated AI features
+* marketplace features
+* features not required for MAWII’s internal operations
+
+CURRENTLY IMPLEMENTED
+
+The following functionality has already been implemented and should be preserved:
+
+Authentication and authorization
+
+* Clerk authentication
+* Unknown Clerk users no longer fall back to another employee
+* Employee profiles control roles and access
+* Owner/manager employee management
+* Public signup hidden
+* /sign-up redirects to sign-in
+
+Recurring services
+
+* Real future calendar jobs generated from occurrences
+* Duplicate occurrence/job prevention
+* Edit one occurrence
+* Change future recurring series
+
+Cleaner workflow
+
+* Directions
+* Access notes
+* Durable job notes
+* Checklist workflow
+* Before/after proof requirements
+* Explicit job completion
+* Incident severity selection
+
+Timekeeping
+
+* Assignment-scoped clock actions
+* Manager approval/rejection
+* Rejection reasons
+
+Quality and incidents
+
+* Incident severity
+* Incident evidence
+* Incident review states
+* Review history
+* UI review-state mismatch fixed
+
+Payouts
+
+* Durable pay periods
+* Draft → approved → paid lifecycle
+* Payout adjustments with required reasons
+* CSV export
+
+Reporting
+
+* Owner Reports page
+* Job completion reporting
+* Customer history
+* Recurring service reporting
+* Incident reporting
+* Labor hours
+* Payout totals
+* Correct current-week date range logic
+
+API
+
+* OpenAPI updated
+* React client regenerated
+* Zod client regenerated
+
+Elevate OS
+
+* Elevate OS import task merged successfully
+
+Verification already completed
+
+* Frontend typecheck passes
+* API typecheck passes
+* Root library typecheck passes
+* OpenAPI generation passes
+* Frontend production build passes
+* API health endpoint returns 200
+* API and web workflows restart successfully
+* Signed-out preview renders correctly
+* Signup option is not exposed
+* No browser application errors observed
+
+CURRENT REMAINING WORK
+
+Task #9:
+Broader route-level and end-to-end regression coverage.
+
+Task #10:
+Verify Clerk production configuration is invitation-only.
+
+The provider-level Clerk setting cannot be guaranteed solely by repository code, so verify what can be verified in code and clearly identify any dashboard/provider action that still requires the owner.
+
+FINAL EXECUTION PLAN
+
+Work in this exact order.
+
+PHASE 1 — REGRESSION TESTING
+
+Complete Task #9.
+
+Create meaningful automated regression coverage around the most important production workflows.
+
+At minimum verify:
+
+Owner/manager:
+
+* sign in
+* dashboard loads
+* customer creation/editing
+* job creation
+* recurring service creation
+* future visit generation
+* worker assignment
+* schedule updates
+* employee management
+* time approval/rejection
+* incident review
+* payout approval/payment
+* reports
+
+Employee:
+
+* sign in
+* sees only authorized/assigned data
+* assigned jobs load correctly
+* directions/access notes display
+* clock in
+* clock out
+* checklist updates persist
+* notes persist
+* proof-photo requirements are enforced
+* incident submission works
+* job completion works
+
+Recurring scheduling:
+
+* weekly
+* biweekly
+* monthly
+* every-N-weeks if supported
+* no duplicate jobs
+* edit one occurrence
+* edit future series
+* paused/skipped behavior if implemented
+
+Authorization:
+
+* employee cannot access owner-only areas
+* unknown users are blocked
+* public signup remains unavailable
+* unauthorized API access fails appropriately
+
+Timekeeping:
+
+* clock actions are assignment-scoped
+* corrections persist
+* approval/rejection works
+* rejection reasons persist
+
+Payouts:
+
+* draft pay period
+* approval
+* adjustments
+* paid state
+* export
+
+Incidents:
+
+* severity
+* evidence
+* state transitions
+* manager review
+* history
+
+Reports:
+
+* current-week numbers
+* labor hours
+* completed jobs
+* recurring services
+* incidents
+* payouts
+
+Do not write shallow tests simply to increase test count. Prioritize production-critical flows.
+
+PHASE 2 — PRODUCTION DATA AND UX AUDIT
+
+Perform a full read-only audit of the app after tests pass.
+
+Check for:
+
+* sample Chicago jobs
+* fake customer data
+* hardcoded day labels
+* stale counts
+* mismatched badges
+* placeholder team members
+* optimistic “sent” messaging states
+* broken navigation
+* dead buttons
+* inconsistent mobile layouts
+* missing loading states
+* missing empty states
+* missing error states
+* confusing owner/employee permissions
+* fields saved but not displayed
+* incorrect date/time behavior
+
+Fix verified problems only.
+
+Do not redesign functioning screens simply for cosmetic reasons.
+
+PHASE 3 — PRODUCTION AUTH HARDENING
+
+Complete Task #10.
+
+Confirm repository behavior supports invitation-only employee access.
+
+Verify:
+
+* no public signup UI
+* direct signup route cannot be used
+* unauthorized Clerk users are rejected
+* employee profiles must explicitly exist
+* role permissions are enforced server-side where appropriate
+
+If Clerk Dashboard configuration must still be changed manually, do not guess or silently bypass it.
+
+Report the exact required owner action.
+
+PHASE 4 — FULL MAWII END-TO-END ACCEPTANCE TEST
+
+Run a realistic operational scenario:
+
+1. Owner logs in.
+2. Create or select a real test customer.
+3. Create a recurring cleaning service.
+4. Verify future jobs appear on schedule.
+5. Assign an employee.
+6. Employee logs in.
+7. Employee sees assigned job.
+8. Employee reviews access notes/directions.
+9. Employee clocks in.
+10. Employee completes checklist.
+11. Employee adds required proof photos.
+12. Employee adds job notes if needed.
+13. Employee reports an incident if applicable.
+14. Employee completes job.
+15. Employee clocks out.
+16. Owner reviews completed work.
+17. Owner reviews/approves time.
+18. Confirm labor hours appear correctly.
+19. Confirm payout calculation/pay-period workflow works.
+20. Confirm reporting reflects the completed job.
+21. Verify all important actions appear in durable activity/history records.
+
+Document any failure and fix it before moving forward.
+
+PHASE 5 — WHATSAPP EMPLOYEE COMMUNICATION
+
+Do not build a new internal messaging platform.
+
+Employees already use WhatsApp.
+
+Keep or improve simple WhatsApp actions from MAWII for:
+
+* assignment notification
+* schedule reminder
+* schedule change
+* job instructions
+* urgent operational communication
+
+The owner/manager remains in control of employee messaging.
+
+Do not introduce WhatsApp Business automation unless explicitly requested later.
+
+PHASE 6 — TWILIO CUSTOMER SMS
+
+Do this only after Phases 1–5 are stable.
+
+Customer communication should use Twilio SMS.
+
+Implement production-ready customer SMS capabilities for:
+
+* booking confirmation
+* upcoming-service reminder
+* reschedule/update notice
+* optional “team is on the way” notice
+* job completion notice
+* manual owner-to-customer SMS
+
+Requirements:
+
+* persistent message history
+* queued/sent/delivered/failed states where provider support allows
+* never display “sent” merely because a request was queued
+* associate messages with customer and job when appropriate
+* safe handling of Twilio secrets
+* development mode should continue functioning without live Twilio credentials
+* clear error handling
+* avoid duplicate automated reminders
+* appropriate opt-out/compliance handling where applicable
+
+Do not add marketing SMS functionality unless explicitly requested.
+
+PHASE 7 — FINAL PRODUCTION READINESS
+
+Before declaring MAWII ready:
+
+Run:
+
+* frontend typecheck
+* API typecheck
+* library/root typecheck
+* automated tests
+* regression/E2E tests
+* production build
+* OpenAPI generation
+* API health check
+
+Then verify:
+
+* owner routes
+* employee routes
+* mobile layout
+* authentication
+* recurring jobs
+* timekeeping
+* photo proof
+* incidents
+* payouts
+* reports
+* WhatsApp links/actions
+* Twilio SMS if credentials are available
+* no browser console errors
+* no known critical or high-severity defects
+
+FINAL OUTPUT REQUIRED
+
+When finished, provide a concise production-readiness report with:
+
+1. Completed functionality
+2. Tests run and pass/fail totals
+3. Any remaining bugs
+4. Any external/manual setup still required
+5. Clerk production configuration status
+6. Twilio configuration status
+7. Deployment status
+8. Whether MAWII is safe to begin using for real operations
+9. Remaining recommended improvements separated into:
+    * required before launch
+    * optional after launch
+
+IMPORTANT EXECUTION RULES
+
+* Continue working through the plan instead of stopping after every minor task.
+* Do not drift into unrelated features.
+* Do not convert MAWII into SaaS architecture.
+* Preserve existing working functionality.
+* Fix regressions before adding more scope.
+* Prefer simple operational UX over feature complexity.
+* Mobile employee usability is critical.
+* Data integrity is more important than visual polish.
+* Authorization must be enforced, not merely hidden in the UI.
+* Twilio is the final major integration.
+* Do not declare the app production-ready unless the end-to-end workflow has been verified.

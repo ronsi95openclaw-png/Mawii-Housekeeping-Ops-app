@@ -5,6 +5,7 @@ import { canManageOperations, canAccessAssignedJob } from "./authorization";
 import { payoutCsv, summarizeApprovedPayouts } from "./payouts";
 import { normalizeMessageIntent } from "./messages";
 import { hasRole } from "./authorization";
+import { canCompleteJob, canTransitionIncident, canTransitionPayPeriod, isChronologicalTimeEntry } from "./operations-rules";
 
 describe("field operations services", () => {
   it("generates weekly and monthly occurrences", () => {
@@ -39,5 +40,23 @@ describe("field operations services", () => {
     expect(normalizeMessageIntent({ recipient: "team", body: "Shift changed", channel: "whatsapp", audience: "employee" })).toMatchObject({
       channel: "whatsapp", audience: "employee", recipient: "team",
     });
+  });
+  it("blocks completion until checklist and both proof stages exist", () => {
+    expect(canCompleteJob([{ completed: true }], [{ kind: "before" }, { kind: "after" }])).toBe(true);
+    expect(canCompleteJob([{ completed: false }], [{ kind: "before" }, { kind: "after" }])).toBe(false);
+    expect(canCompleteJob([{ completed: true }], [{ kind: "before" }])).toBe(false);
+  });
+  it("allows only forward incident review transitions", () => {
+    expect(canTransitionIncident("open", "in_review")).toBe(true);
+    expect(canTransitionIncident("in_review", "resolved")).toBe(true);
+    expect(canTransitionIncident("open", "resolved")).toBe(false);
+    expect(canTransitionIncident("resolved", "open")).toBe(false);
+  });
+  it("enforces pay-period lifecycle and chronological clocks", () => {
+    expect(canTransitionPayPeriod("draft", "approved")).toBe(true);
+    expect(canTransitionPayPeriod("approved", "paid")).toBe(true);
+    expect(canTransitionPayPeriod("draft", "paid")).toBe(false);
+    expect(isChronologicalTimeEntry(new Date("2026-01-01T09:00Z"), new Date("2026-01-01T10:00Z"))).toBe(true);
+    expect(isChronologicalTimeEntry(new Date("2026-01-01T10:00Z"), new Date("2026-01-01T09:00Z"))).toBe(false);
   });
 });
