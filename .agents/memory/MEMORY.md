@@ -1,2 +1,3 @@
 - [Elevate job intake](elevate-job-intake.md) — Elevate OS intake uses GoHighLevel webhooks; schedule times are interpreted in the DFW business timezone.
 - [Owner report boundaries](owner-report-boundaries.md) — Keep report fixtures isolated in future dates and interpret date-only ranges in America/Chicago.
+- [Cleaner workflow gates](cleaner-workflow-gates.md) — Cleaner job regression tests must prove fresh-read persistence and completion state transitions, not only response payloads.
