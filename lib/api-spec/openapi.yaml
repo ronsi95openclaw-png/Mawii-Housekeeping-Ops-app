@@ -1329,6 +1329,20 @@ components:
         jobId: { type: integer }
         employeeId: { type: integer }
         status: { type: string }
+        # Summary of the job travels with the assignment so a phone renders the list
+        # in one request instead of one per row.
+        job:
+          type: object
+          required: [id, clientName, address, serviceType, scheduledDate, startTime, endTime, status]
+          properties:
+            id: { type: integer }
+            clientName: { type: string }
+            address: { type: string }
+            serviceType: { type: string }
+            scheduledDate: { type: string, format: date }
+            startTime: { type: string }
+            endTime: { type: string }
+            status: { type: string }
     JobAssignmentInput:
       type: object
       required: [employeeId]

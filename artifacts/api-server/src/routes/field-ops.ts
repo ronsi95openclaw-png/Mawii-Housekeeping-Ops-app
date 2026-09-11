@@ -225,7 +225,22 @@ router.patch("/employees/:id", requireRole("owner"), async (req, res) => {
 router.get("/jobs/assigned", async (req, res) => {
   const employee = req.authContext ? (await db.select().from(employeesTable).where(eq(employeesTable.clerkUserId, req.authContext.clerkUserId)))[0] : undefined;
   if (!employee) { res.status(403).json({ error: "No employee profile is linked to this Clerk user" }); return; }
-  res.json(await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.employeeId, employee.id)));
+  const assignments = await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.employeeId, employee.id));
+  // Carry a job summary so the field list is one request rather than one per row.
+  const jobIds = assignments.map((assignment) => assignment.jobId);
+  const jobs = jobIds.length
+    ? await db.select({
+        id: jobsTable.id,
+        clientName: jobsTable.clientName,
+        address: jobsTable.address,
+        serviceType: jobsTable.serviceType,
+        scheduledDate: jobsTable.scheduledDate,
+        startTime: jobsTable.startTime,
+        endTime: jobsTable.endTime,
+        status: jobsTable.status,
+      }).from(jobsTable).where(inArray(jobsTable.id, jobIds))
+    : [];
+  res.json(assignments.map((assignment) => ({ ...assignment, job: jobs.find((job) => job.id === assignment.jobId) })));
 });
 router.post("/assignments/:id/:decision", async (req, res) => {
   const decision = req.params.decision;

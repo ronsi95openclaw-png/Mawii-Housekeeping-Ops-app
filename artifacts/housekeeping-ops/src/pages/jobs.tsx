@@ -183,12 +183,12 @@ export function Jobs() {
         <EmptyState title="No jobs match that view" body="Try clearing the search or changing the status filter." action={<button className="button button-secondary" onClick={() => { setQuery(''); setFilter('all'); }} data-testid="button-clear-job-filters">Clear filters</button>} />
       )}
       
-      {showCreate && <CreateJobDialog pending={create.isPending} initialDate={requestedDate} onClose={closeCreate} onSubmit={submitCreate} />}
+      {showCreate && <CreateJobDialog pending={create.isPending} failed={create.isError} initialDate={requestedDate} onClose={closeCreate} onSubmit={submitCreate} />}
     </div>
   );
 }
 
-function EditJobDialog({ job, onClose, onSubmit, pending }: { job: Job; onClose: () => void; onSubmit: (data: Record<string, unknown>) => void; pending: boolean }) {
+function EditJobDialog({ job, onClose, onSubmit, pending, failed }: { job: Job; onClose: () => void; onSubmit: (data: Record<string, unknown>) => void; pending: boolean; failed?: boolean }) {
   const [form, setForm] = useState({
     scheduledDate: job.scheduledDate,
     startTime: job.startTime,
@@ -241,6 +241,7 @@ function EditJobDialog({ job, onClose, onSubmit, pending }: { job: Job; onClose:
             </div>
           </fieldset>
         </div>
+        {failed ? <p className="form-error">That change could not be saved. Check your connection and try again.</p> : null}
         <div className="modal-actions">
           <button type="button" className="button button-secondary" onClick={onClose}>Cancel</button>
           <button className="button button-primary" disabled={pending} data-testid="button-save-job-edit">{pending ? 'Saving…' : 'Save changes'}</button>
@@ -250,7 +251,7 @@ function EditJobDialog({ job, onClose, onSubmit, pending }: { job: Job; onClose:
   );
 }
 
-export function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { onClose: () => void; onSubmit: (data: NewJobForm) => void; pending: boolean; initialDate?: string }) {
+export function CreateJobDialog({ onClose, onSubmit, pending, initialDate, failed }: { onClose: () => void; onSubmit: (data: NewJobForm) => void; pending: boolean; initialDate?: string; failed?: boolean }) {
   const employees = useListEmployees();
   const customers = useListCustomers();
   const [form, setForm] = useState({ clientName: '', address: '', scheduledDate: initialDate || todayISO(), startTime: '09:00', endTime: '12:00', serviceType: 'Standard cleaning', serviceVariant: '2 bed / 2 bath Standard', addOns: [] as string[], durationMinutes: 180, frequency: 'Every 4 weeks', notes: '', clientPhone: '', teamMemberIds: [] as number[], employeeIds: [] as number[], customerId: '', addressId: '' });
@@ -376,6 +377,7 @@ export function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { o
           <label className="span-2">Additional information<textarea rows={3} value={form.notes} onChange={(e) => update('notes', e.target.value)} placeholder="Access instructions or client requests" data-testid="input-job-notes" /></label>
         </div>
         
+        {failed ? <p className="form-error">That job could not be created. Check the required fields and your connection, then try again.</p> : null}
         <div className="modal-actions">
           <button type="button" className="button button-secondary" onClick={onClose} data-testid="button-cancel-create-job">Cancel</button>
           <button className="button button-primary" disabled={pending} data-testid="button-submit-create-job">{pending ? 'Creating…' : 'Create job'}<ArrowRight size={15} /></button>
@@ -444,7 +446,7 @@ function JobDetail({ job }: { job: Job }) {
       </div>
 
       <button className="button button-secondary" onClick={() => setEditing(true)} data-testid="button-edit-job"><Edit2 size={15} />Edit or reschedule</button>
-      {editing ? <EditJobDialog job={current} pending={update.isPending} onClose={() => setEditing(false)} onSubmit={(data) => { patch(data); setEditing(false); }} /> : null}
+      {editing ? <EditJobDialog job={current} pending={update.isPending} failed={update.isError} onClose={() => setEditing(false)} onSubmit={(data) => { patch(data); setEditing(false); }} /> : null}
       
       <div className="detail-section">
         <div className="detail-section-head" style={{ marginBottom: '6px' }}>
