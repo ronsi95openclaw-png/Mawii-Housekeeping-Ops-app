@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "oUSl-hD2yU90QpamUxE3X"
+uri = "file://exports/mawii-housekeeping-ops.zip"
+type = "unspecified"
+title = "MAWII Housekeeping Ops app"
+description = "Downloadable source bundle for the current MAWII app. Git internals, dependencies, build caches, and environment files were excluded."
+logical_id = "d1b41651-c8f3-4921-bd3b-e388a2c05851"
+content_hash = "sha256:07454b72a5813dbc5c50957db9396eb06979f88328c0cabd46dd2c44719d28d0"
+size = 1328448
+mtime_ms = 1789090206613
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:48f188a1-8cd4-4c4c-b403-a3d58283fa2a/d1b41651-c8f3-4921-bd3b-e388a2c05851/1b40c65b-3fa9-4f24-a879-be6dc3cc7b3c"
+storage_version_token = "1789090210892575"
+content_type = "application/octet-stream"
