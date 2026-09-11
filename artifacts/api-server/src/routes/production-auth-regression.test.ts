@@ -68,7 +68,7 @@ describe("production authentication boundary", () => {
         }).returning();
         cleanerId = cleaner.id;
 
-        expectStatus(await request(baseUrl, "/employees"), 401);
+        expectStatus(await request(baseUrl, "/jobs/assigned"), 401);
         expectStatus(await request(baseUrl, "/employees", {
           "x-dev-role": "owner",
         }), 401);
@@ -84,7 +84,7 @@ describe("production authentication boundary", () => {
         expectStatus(await request(baseUrl, "/employees/me", {
           "x-test-clerk-user-id": unknownUserId,
           "x-dev-role": "owner",
-        }), 401);
+        }), 403);
 
         const knownEmployee = expectStatus(await request(baseUrl, "/employees/me", {
           "x-test-clerk-user-id": cleanerUserId,
