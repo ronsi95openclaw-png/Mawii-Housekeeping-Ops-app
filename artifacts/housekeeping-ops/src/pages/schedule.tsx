@@ -103,7 +103,7 @@ export function Schedule() {
         <div className="schedule-row" style={view === 'day' ? { gridTemplateColumns: '58px 1fr' } : undefined}>
           <div className="time-axis"><span>8 AM</span><span>10 AM</span><span>12 PM</span><span>2 PM</span><span>4 PM</span></div>
           {week.map((day) => {
-            const dayISO = day.toISOString().slice(0, 10);
+            const dayISO = isoOf(day);
             const dayJobs = jobList.filter((job) => job.scheduledDate === dayISO);
             return (
               <div className="day-column" key={day.toISOString()}>

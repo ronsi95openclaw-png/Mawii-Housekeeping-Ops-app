@@ -19,7 +19,15 @@ export function formatTime(value?: string) {
   return `${hour}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
 }
 
-export function todayISO() { return new Date().toISOString().slice(0, 10); }
+/**
+ * Today where the crew is, not in UTC. toISOString() rolls over at 7pm Central, which put
+ * tomorrow's date on new jobs and pushed report ranges a day into the future.
+ */
+export function todayISO() { return localISO(new Date()); }
+
+export function localISO(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
 export function startOfWeek() {
   const d = new Date(); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); return d;

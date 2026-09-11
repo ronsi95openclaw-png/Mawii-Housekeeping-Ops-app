@@ -6,7 +6,7 @@ import {
   useListPayPeriods, useCreatePayPeriod, useApprovePayPeriod, useMarkPayPeriodPaid, useAddPayoutAdjustment, useGetOwnerReport,
   getListPayPeriodsQueryKey, getListPayoutsQueryKey
 } from '@workspace/api-client-react';
-import { PageIntro, LoadingState, ErrorState, EmptyState, formatDate, statusTone, Badge, statusLabel, formatTime } from '@/lib/shared';
+import { PageIntro, LoadingState, ErrorState, EmptyState, formatDate, statusTone, Badge, statusLabel, formatTime, todayISO } from '@/lib/shared';
 import { AlertTriangle, Activity as ActivityIcon, ShieldCheck, Check, DollarSign, Download } from 'lucide-react';
 import { Link } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
@@ -144,7 +144,7 @@ function TimeCorrectionQueue() {
 export function Payouts() {
   const now = new Date();
   const initialStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const initialEnd = now.toISOString().slice(0, 10);
+  const initialEnd = todayISO();
   const [start, setStart] = useState(initialStart);
   const [end, setEnd] = useState(initialEnd);
   const employees = useListEmployees({ includeInactive: 'true' });
@@ -236,7 +236,7 @@ export function Payouts() {
 export function Reports() {
   const now = new Date();
   const [start, setStart] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
-  const [end, setEnd] = useState(now.toISOString().slice(0, 10));
+  const [end, setEnd] = useState(todayISO());
   const report = useGetOwnerReport({ start, end });
   const data = report.data as {
     jobs?: { volume?: number; completed?: number };

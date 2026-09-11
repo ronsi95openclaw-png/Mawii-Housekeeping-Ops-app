@@ -100,7 +100,9 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
   try {
     const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 60);
     const includePast = req.query.includePast === "true";
-    const today = new Date().toISOString().slice(0, 10);
+    // The crew works Central time; a UTC "today" rolls over at 7pm and would skip the very
+    // jobs this sync exists to import.
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
     const list = await gmail(`/gmail/v1/users/me/messages?q=${encodeURIComponent(buildQuery(days))}&maxResults=25`);
     const messages: Array<{ id: string }> = list?.messages ?? [];
     if (!messages.length) {
