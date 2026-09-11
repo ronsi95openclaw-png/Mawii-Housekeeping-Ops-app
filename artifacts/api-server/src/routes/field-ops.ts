@@ -260,10 +260,9 @@ router.post("/jobs/:jobId/complete", async (req, res) => {
 });
 
 router.post("/jobs/:jobId/photos", async (req, res) => {
-  if (!(await canAccessJob(req, id(req.params.jobId)))) { res.status(403).json({ error: "Job is not assigned to you" }); return; }
-  const input = body(req);
   // Authorize before validating: an unauthorized caller learns nothing about the payload shape.
   if (!(await canAccessJob(req, id(req.params.jobId)))) { res.status(403).json({ error: "Job is not assigned to you" }); return; }
+  const input = body(req);
   if (
     !isProofPhotoObjectPath(input.objectPath) ||
     !["before", "after"].includes(input.kind) ||
