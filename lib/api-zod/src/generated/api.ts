@@ -57,6 +57,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })).optional(),
   "assignments": zod.array(zod.object({
@@ -112,6 +113,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })).optional(),
   "assignments": zod.array(zod.object({
@@ -201,6 +203,7 @@ export const ListJobsResponseItem = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })).optional(),
   "assignments": zod.array(zod.object({
@@ -281,6 +284,7 @@ export const CreateJobResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })).optional(),
   "assignments": zod.array(zod.object({
@@ -341,6 +345,7 @@ export const GetJobResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })).optional(),
   "assignments": zod.array(zod.object({
@@ -419,6 +424,7 @@ export const UpdateJobResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })).optional(),
   "assignments": zod.array(zod.object({
@@ -484,6 +490,7 @@ export const UpdateJobChecklistResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })).optional(),
   "assignments": zod.array(zod.object({
@@ -666,6 +673,7 @@ export const ImportElevateJobResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })).optional(),
   "assignments": zod.array(zod.object({
@@ -1028,6 +1036,7 @@ export const GetEmployeeMeResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })
 
@@ -1045,9 +1054,14 @@ export const ClaimEmployeeResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })
 
+
+export const ListEmployeesQueryParams = zod.object({
+  "includeInactive": zod.enum(['true']).optional().describe('Include deactivated employees so they can be reviewed and restored.')
+})
 
 export const ListEmployeesResponseItem = zod.object({
   "id": zod.number().int(),
@@ -1055,6 +1069,7 @@ export const ListEmployeesResponseItem = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })
 export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem)
@@ -1074,6 +1089,7 @@ export const CreateEmployeeResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })
 
@@ -1096,6 +1112,7 @@ export const UpdateEmployeeResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })
 
@@ -1372,6 +1389,7 @@ export const CompleteAssignedJobResponse = zod.object({
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
   "phone": zod.string().nullish(),
+  "active": zod.string().optional(),
   "bindingToken": zod.string().nullish()
 })).optional(),
   "assignments": zod.array(zod.object({

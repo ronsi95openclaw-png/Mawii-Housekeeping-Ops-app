@@ -59,6 +59,8 @@ export * from './jobNoteInput';
 export * from './jobStatus';
 export * from './jobUpdate';
 export * from './jobUpdateStatus';
+export * from './listEmployeesIncludeInactive';
+export * from './listEmployeesParams';
 export * from './listIncidentsParams';
 export * from './listJobsParams';
 export * from './listJobsStatus';

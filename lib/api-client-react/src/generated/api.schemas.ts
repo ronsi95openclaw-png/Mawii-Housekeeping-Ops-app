@@ -53,6 +53,7 @@ export interface Employee {
   role: EmployeeRole;
   /** @nullable */
   phone?: string | null;
+  active?: string;
   /** @nullable */
   bindingToken?: string | null;
 }
@@ -938,6 +939,20 @@ export const ListJobsStatus = {
   in_progress: 'in_progress',
   completed: 'completed',
   attention: 'attention',
+} as const;
+
+export type ListEmployeesParams = {
+/**
+ * Include deactivated employees so they can be reviewed and restored.
+ */
+includeInactive?: ListEmployeesIncludeInactive;
+};
+
+export type ListEmployeesIncludeInactive = typeof ListEmployeesIncludeInactive[keyof typeof ListEmployeesIncludeInactive];
+
+
+export const ListEmployeesIncludeInactive = {
+  true: 'true',
 } as const;
 
 export type GetActiveTimeEntriesParams = {
