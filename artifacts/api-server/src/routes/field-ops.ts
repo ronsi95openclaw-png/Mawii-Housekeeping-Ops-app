@@ -10,7 +10,13 @@ import { canCompleteJob, canTransitionIncident, canTransitionPayPeriod, isChrono
 import { canCleanerAccessJob } from "../lib/job-access";
 
 const router: IRouter = Router();
-router.use(requireAuth);
+router.use((req, res, next) => {
+  if (req.method === "POST" && req.path === "/integrations/elevate/jobs") {
+    next();
+    return;
+  }
+  requireAuth(req, res, next);
+});
 const id = (value: string | string[]) => Number.parseInt(Array.isArray(value) ? value[0]! : value, 10);
 const body = (req: any) => req.body ?? {};
 function chicagoBoundary(date: string, endOfDay: boolean) {
