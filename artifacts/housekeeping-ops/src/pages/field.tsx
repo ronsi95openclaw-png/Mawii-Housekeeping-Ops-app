@@ -145,7 +145,9 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
   const isChecklistComplete = !job.checklist?.some(i => !i.completed);
   const hasBefore = photos.data?.some(p => p.kind === 'before');
   const hasAfter = photos.data?.some(p => p.kind === 'after');
-  const canComplete = isChecklistComplete && hasBefore && hasAfter;
+  // The server also refuses completion while a shift is still open, so the button has to
+  // agree — otherwise the tap is rejected and nothing visibly happens.
+  const canComplete = isChecklistComplete && hasBefore && hasAfter && !activeEntry;
 
   const handleComplete = () => {
     if (!canComplete) return;
@@ -346,8 +348,10 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
               {!isChecklistComplete && <span>• Complete all checklist items</span>}
               {!hasBefore && <span>• Upload at least one Before photo</span>}
               {!hasAfter && <span>• Upload at least one After photo</span>}
+              {activeEntry && <span>• Clock out before completing</span>}
             </div>
           )}
+          {completeJob.isError ? <p className="form-error" data-testid="text-complete-error">Mawii could not close this job. Check your signal and try again.</p> : null}
           <button 
             className="button button-primary" 
             style={{ width: '100%', height: '36px' }} 
