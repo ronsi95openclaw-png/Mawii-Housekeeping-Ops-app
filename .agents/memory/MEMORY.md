@@ -2,3 +2,4 @@
 - [Owner report boundaries](owner-report-boundaries.md) — Keep report fixtures isolated in future dates and interpret date-only ranges in America/Chicago.
 - [Cleaner workflow gates](cleaner-workflow-gates.md) — Cleaner job regression tests must prove fresh-read persistence and completion state transitions, not only response payloads.
 - [Employee lifecycle cleanup](employee-lifecycle-cascade.md) — Employee-scoped onboarding and notification rows must not block profile cleanup.
+- [Clerk API token forwarding](clerk-api-token-forwarding.md) — Preview Clerk sessions need an explicit bearer-token bridge to reach the API reliably.
