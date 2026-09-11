@@ -40,7 +40,10 @@ export const attachAuth: RequestHandler = async (req, _res, next) => {
     }
 
     const developmentRole = process.env.NODE_ENV !== "production" ? req.header("x-dev-role") : undefined;
-    req.authContext = { clerkUserId, role: employee?.role ?? (isFirstUserBootstrap ? developmentRole : undefined) };
+    // A deactivated employee keeps their row and history but carries no role, so every
+    // role-gated route rejects them even while their Clerk session is still valid.
+    const activeRole = employee?.active === "true" ? employee.role : undefined;
+    req.authContext = { clerkUserId, role: activeRole ?? (isFirstUserBootstrap ? developmentRole : undefined) };
     next();
   } catch (error) {
     next(error);

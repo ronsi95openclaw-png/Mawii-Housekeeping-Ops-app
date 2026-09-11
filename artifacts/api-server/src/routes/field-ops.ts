@@ -154,7 +154,7 @@ router.patch("/occurrences/:id", requireRole("owner", "manager"), async (req, re
 
 router.get("/employees/me", async (req, res) => {
   const employee = req.authContext ? (await db.select().from(employeesTable).where(eq(employeesTable.clerkUserId, req.authContext.clerkUserId)))[0] : undefined;
-  if (!employee) { res.status(403).json({ error: "No employee profile is linked to this Clerk user" }); return; } res.json(employee);
+  if (!employee || employee.active !== "true") { res.status(403).json({ error: "No active employee profile is linked to this Clerk user" }); return; } res.json(employee);
 });
 router.get("/employees", requireRole("owner", "manager"), async (_req, res) => res.json(await db.select().from(employeesTable).where(eq(employeesTable.active, "true"))));
 router.post("/employees", requireRole("owner"), async (req, res) => {
