@@ -246,6 +246,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TeamMember"
+  /integrations/elevate/gmail-sync:
+    post:
+      operationId: syncElevateMailbox
+      tags: [integrations]
+      summary: Read the ElevateOS schedule emails and import any new appointments
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scanned, created, alreadyImported, problems]
+                properties:
+                  scanned: { type: integer }
+                  created: { type: integer }
+                  alreadyImported: { type: integer }
+                  problems: { type: array, items: { type: string } }
   /integrations/elevate/jobs:
     post:
       operationId: importElevateJob
