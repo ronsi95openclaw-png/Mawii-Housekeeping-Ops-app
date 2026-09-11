@@ -194,9 +194,12 @@ function EditJobDialog({ job, onClose, onSubmit, pending }: { job: Job; onClose:
     serviceVariant: job.serviceVariant || '',
     durationMinutes: job.durationMinutes ?? 180,
     addOns: job.addOns || [],
+    employeeIds: job.assignedEmployees?.map((member) => member.id) ?? [],
   });
+  const employees = useListEmployees();
 
   const toggleAddOn = (addOn: string) => setForm((current) => ({ ...current, addOns: current.addOns.includes(addOn) ? current.addOns.filter((item) => item !== addOn) : [...current.addOns, addOn] }));
+  const toggleEmployee = (id: number) => setForm((current) => ({ ...current, employeeIds: current.employeeIds.includes(id) ? current.employeeIds.filter((item) => item !== id) : [...current.employeeIds, id] }));
 
   return (
     <div className="modal-scrim" onClick={onClose}>
@@ -220,6 +223,18 @@ function EditJobDialog({ job, onClose, onSubmit, pending }: { job: Job; onClose:
               {ADD_ON_OPTIONS.map((addOn) => (
                 <label key={addOn}><input type="checkbox" checked={form.addOns.includes(addOn)} onChange={() => toggleAddOn(addOn)} />{addOn}</label>
               ))}
+            </div>
+          </fieldset>
+          <fieldset className="span-2 add-on-field">
+            <legend>Assigned team</legend>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {(employees.data || []).map((employee) => (
+                <label key={employee.id}>
+                  <input type="checkbox" checked={form.employeeIds.includes(employee.id)} onChange={() => toggleEmployee(employee.id)} data-testid={`checkbox-edit-employee-${employee.id}`} />
+                  {employee.name} · {employee.role}
+                </label>
+              ))}
+              {!(employees.data || []).length && <span className="muted-copy">No employees available.</span>}
             </div>
           </fieldset>
         </div>
