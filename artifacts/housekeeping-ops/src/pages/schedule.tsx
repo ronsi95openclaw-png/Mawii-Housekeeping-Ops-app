@@ -1,26 +1,64 @@
 import { useState, useMemo } from 'react';
-import { useListJobs } from '@workspace/api-client-react';
+import { useListJobs, useCreateJob, getListJobsQueryKey } from '@workspace/api-client-react';
 import type { Job } from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { CreateJobDialog } from '@/pages/jobs';
 import { ChevronLeft, ChevronRight, X, Clock3, MapPin, UserRound, ArrowRight, Plus } from 'lucide-react';
 import { Link } from 'wouter';
 import { LoadingState, ErrorState, PageIntro, Badge, Avatar, formatDate, formatTime, statusTone, statusLabel, startOfWeek, todayISO } from '@/lib/shared';
 
+type ScheduleView = 'day' | 'week';
+
+const VIEW_LABELS: Record<ScheduleView, string> = { day: 'Today', week: 'This week' };
+
+function isoOf(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export function Schedule() {
   const jobs = useListJobs();
-  const [weekOffset, setWeekOffset] = useState(0);
+  const create = useCreateJob();
+  const queryClient = useQueryClient();
+  const [view, setView] = useState<ScheduleView>('week');
+  const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<Job | null>(null);
-  
-  const week = useMemo(() => { 
-    const d = startOfWeek(); 
-    d.setDate(d.getDate() + weekOffset * 7); 
-    return Array.from({ length: 7 }, (_, i) => { const day = new Date(d); day.setDate(d.getDate() + i); return day; }); 
-  }, [weekOffset]);
-  
-  if (jobs.isLoading) return <LoadingState label="Loading the week" />;
+  const [createDate, setCreateDate] = useState<string | null>(null);
+
+  const week = useMemo(() => {
+    if (view === 'day') {
+      const day = new Date();
+      day.setDate(day.getDate() + offset);
+      return [day];
+    }
+    if (view === 'week') {
+      const start = startOfWeek();
+      start.setDate(start.getDate() + offset * 7);
+      return Array.from({ length: 7 }, (_, i) => { const day = new Date(start); day.setDate(start.getDate() + i); return day; });
+    }
+    const anchor = new Date();
+    anchor.setDate(1);
+    anchor.setMonth(anchor.getMonth() + offset);
+    const gridStart = new Date(anchor);
+    gridStart.setDate(1 - gridStart.getDay());
+    const weeks = Math.ceil((new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate() + gridStart.getDay()) / 7);
+    return Array.from({ length: weeks * 7 }, (_, i) => { const day = new Date(gridStart); day.setDate(gridStart.getDate() + i); return day; });
+  }, [view, offset]);
+
+  if (jobs.isLoading) return <LoadingState label="Loading the schedule" />;
   if (jobs.isError) return <ErrorState onRetry={() => void jobs.refetch()} />;
-  
+
   const jobList = jobs.data || [];
-  
+  const anchorDay = week[Math.floor(week.length / 2)];
+  const rangeLabel = view === 'day'
+    ? formatDate(isoOf(week[0]), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : view === 'week'
+      ? `${formatDate(isoOf(week[0]), { month: 'short', day: 'numeric' })} — ${formatDate(isoOf(week[6]), { month: 'short', day: 'numeric', year: 'numeric' })}`
+      : anchorDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const submitCreate = (data: Parameters<typeof create.mutate>[0]['data']) => {
+    create.mutate({ data }, { onSuccess: () => { setCreateDate(null); void queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() }); } });
+  };
+
   return (
     <div className="content-stack">
       <PageIntro 
@@ -29,16 +67,21 @@ export function Schedule() {
         body="See the shape of the week, then make the next move." 
         action={
           <div className="week-controls">
-            <button className="icon-button" onClick={() => setWeekOffset((v) => v - 1)} data-testid="button-previous-week"><ChevronLeft size={17} /></button>
-            <button className="button button-secondary" onClick={() => setWeekOffset(0)} data-testid="button-current-week">This week</button>
-            <button className="icon-button" onClick={() => setWeekOffset((v) => v + 1)} data-testid="button-next-week"><ChevronRight size={17} /></button>
-            <Link href={`/jobs?new=1&date=${todayISO()}`} className="button button-primary" data-testid="link-schedule-new-job"><Plus size={16} />New job</Link>
+            <button className="icon-button" onClick={() => setOffset((v) => v - 1)} data-testid="button-previous-period"><ChevronLeft size={17} /></button>
+            <button className="button button-secondary" onClick={() => setOffset(0)} data-testid="button-current-period">{VIEW_LABELS[view]}</button>
+            <button className="icon-button" onClick={() => setOffset((v) => v + 1)} data-testid="button-next-period"><ChevronRight size={17} /></button>
+            <button className="button button-primary" onClick={() => setCreateDate(todayISO())} data-testid="button-schedule-new-job"><Plus size={16} />New job</button>
           </div>
         }
       />
       
       <div className="schedule-meta">
-        <span className="mono">{formatDate(week[0].toISOString().slice(0, 10), { month: 'short', day: 'numeric' })} — {formatDate(week[6].toISOString().slice(0, 10), { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+        <div className="view-switch" role="group" aria-label="Schedule range">
+          {(Object.keys(VIEW_LABELS) as ScheduleView[]).map((value) => (
+            <button key={value} className={view === value ? 'view-active' : ''} onClick={() => { setView(value); setOffset(0); }} data-testid={`button-view-${value}`}>{VIEW_LABELS[value]}</button>
+          ))}
+        </div>
+        <span className="mono">{rangeLabel}</span>
         <span className="schedule-legend">
           <i className="legend-dot legend-teal" />Scheduled 
           <i className="legend-dot legend-orange" />In progress 
@@ -63,7 +106,7 @@ export function Schedule() {
             const dayJobs = jobList.filter((job) => job.scheduledDate === dayISO);
             return (
               <div className="day-column" key={day.toISOString()}>
-                <Link href={`/jobs?new=1&date=${dayISO}`} className="day-add" aria-label={`Add a job on ${formatDate(dayISO, { weekday: 'long', month: 'short', day: 'numeric' })}`} data-testid={`link-add-job-${dayISO}`}><Plus size={15} /></Link>
+                <button type="button" onClick={() => setCreateDate(dayISO)} className="day-add" aria-label={`Add a job on ${formatDate(dayISO, { weekday: 'long', month: 'short', day: 'numeric' })}`} data-testid={`button-add-job-${dayISO}`}><Plus size={15} /></button>
                 {dayJobs.length ? dayJobs.map((job) => (
                   <button className={`schedule-job schedule-${job.status}`} key={job.id} onClick={() => setSelected(job)} data-testid={`schedule-job-${job.id}`}>
                     <span>{formatTime(job.startTime)}</span>
@@ -79,6 +122,7 @@ export function Schedule() {
       </section>
       
       {selected && <JobQuickView job={selected} onClose={() => setSelected(null)} />}
+      {createDate ? <CreateJobDialog pending={create.isPending} initialDate={createDate} onClose={() => setCreateDate(null)} onSubmit={submitCreate} /> : null}
     </div>
   );
 }

@@ -85,8 +85,8 @@ function CreateCustomerDialog({ onClose, onSubmit, pending }: { onClose: () => v
   const [form, setForm] = useState({ name: '', phone: '', email: '', notes: '' });
   
   return (
-    <div className="modal-scrim">
-      <form className="modal panel small-modal" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(form); }}>
+    <div className="modal-scrim" onClick={onClose}>
+      <form className="modal panel small-modal" onClick={(e) => e.stopPropagation()} onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(form); }}>
         <div className="modal-head">
           <div><span className="eyebrow">Client profile</span><h3>Add customer</h3></div>
           <button type="button" className="icon-button" onClick={onClose} data-testid="button-close-create"><X size={17} /></button>
@@ -216,8 +216,8 @@ function CreateAddressDialog({ onClose, onSubmit, pending }: { onClose: () => vo
   const [form, setForm] = useState({ label: '', line1: '', line2: '', city: '', state: 'TX', postalCode: '', accessNotes: '' });
   
   return (
-    <div className="modal-scrim">
-      <form className="modal panel" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(form); }}>
+    <div className="modal-scrim" onClick={onClose}>
+      <form className="modal panel" onClick={(e) => e.stopPropagation()} onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(form); }}>
         <div className="modal-head">
           <div><span className="eyebrow">Property</span><h3>Add service address</h3></div>
           <button type="button" className="icon-button" onClick={onClose} data-testid="button-close-address"><X size={17} /></button>

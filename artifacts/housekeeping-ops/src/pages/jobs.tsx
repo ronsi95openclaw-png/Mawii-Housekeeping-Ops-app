@@ -162,7 +162,7 @@ export function Jobs() {
   );
 }
 
-function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { onClose: () => void; onSubmit: (data: NewJobForm) => void; pending: boolean; initialDate?: string }) {
+export function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { onClose: () => void; onSubmit: (data: NewJobForm) => void; pending: boolean; initialDate?: string }) {
   const employees = useListEmployees();
   const customers = useListCustomers();
   const [form, setForm] = useState({ clientName: '', address: '', scheduledDate: initialDate || todayISO(), startTime: '09:00', endTime: '12:00', serviceType: 'Standard cleaning', serviceVariant: '2 bed / 2 bath Standard', addOns: [] as string[], durationMinutes: 180, frequency: 'Every 4 weeks', notes: '', clientPhone: '', teamMemberIds: [] as number[], employeeIds: [] as number[], customerId: '', addressId: '' });
@@ -202,8 +202,8 @@ function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { onClose:
   };
 
   return (
-    <div className="modal-scrim">
-      <form className="modal panel" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(form); }}>
+    <div className="modal-scrim" onClick={onClose}>
+      <form className="modal panel" onClick={(e) => e.stopPropagation()} onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(form); }}>
         <div className="modal-head">
           <div><span className="eyebrow">Elevate OS intake</span><h3>Add a job</h3></div>
           <button type="button" className="icon-button" onClick={onClose} data-testid="button-close-create-job"><X size={17} /></button>

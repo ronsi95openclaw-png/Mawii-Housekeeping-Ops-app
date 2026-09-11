@@ -48,7 +48,7 @@ export function Team() {
                 <Badge tone={emp.role === 'owner' ? 'red' : emp.role === 'manager' ? 'orange' : 'green'}>{emp.role}</Badge>
               </div>
               <h3>{emp.name}</h3>
-              <span className="team-role">{emp.clerkUserId ? 'Linked to Clerk' : 'No Clerk ID'}</span>
+              <span className="team-role">{emp.clerkUserId.startsWith('pending-') ? 'Waiting to sign in' : 'Account active'}</span>
               <div className="team-contact">
                 <span><Phone size={14} />{emp.phone || 'No phone'}</span>
                 <div className="team-actions">
