@@ -1,4 +1,4 @@
-import { useState, useMemo, FormEvent } from 'react';
+import { useState, useMemo, useEffect, FormEvent } from 'react';
 import { useListCustomers, useCreateCustomer, useListCustomerAddresses, useCreateCustomerAddress, getListCustomersQueryKey, getListCustomerAddressesQueryKey, useListJobs } from '@workspace/api-client-react';
 import type { Customer } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,6 +12,16 @@ export function Customers() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  // Below this width the two-column layout stacks, which hides the detail under a
+  // full-height list — so it opens as a dialog instead, the same as Jobs.
+  const [asOverlay, setAsOverlay] = useState(() => window.matchMedia('(max-width: 1050px)').matches);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 1050px)');
+    const sync = (event: MediaQueryListEvent) => setAsOverlay(event.matches);
+    mediaQuery.addEventListener('change', sync);
+    return () => mediaQuery.removeEventListener('change', sync);
+  }, []);
 
   const filtered = (customers.data || []).filter(c => 
     c.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -61,7 +71,14 @@ export function Customers() {
             ))}
           </section>
           {selectedCustomer ? (
-            <CustomerDetail customer={selectedCustomer} />
+            asOverlay ? (
+              <div className="modal-scrim" onClick={() => setSelectedCustomer(null)}>
+                <div className="detail-overlay" onClick={(event) => event.stopPropagation()}>
+                  <button className="icon-button detail-overlay-close" onClick={() => setSelectedCustomer(null)} aria-label="Close client" data-testid="button-close-customer-detail"><X size={17} /></button>
+                  <CustomerDetail customer={selectedCustomer} />
+                </div>
+              </div>
+            ) : <CustomerDetail customer={selectedCustomer} />
           ) : (
             <div className="panel detail-placeholder dot-grid">
               <UserRound size={28} />
