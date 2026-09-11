@@ -12,7 +12,7 @@ import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, ChevronRight, ClipboardCheck, MapPin, Check, MessageSquare, Phone, CheckCircle2, Send, X, ArrowRight, AlertTriangle, LoaderCircle, RefreshCw, Edit2 } from 'lucide-react';
 import { ADD_ON_OPTIONS, addOnTotals, money } from '@/lib/pricing';
-import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, todayISO } from '@/lib/shared';
+import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, todayISO, DetailPane } from '@/lib/shared';
 
 const SERVICE_OPTIONS = ['Standard cleaning', 'Deep cleaning', 'Move In/Out cleaning'];
 
@@ -90,15 +90,6 @@ export function Jobs() {
   const selectedId = Number(params.get('job')) || null;
   const requestedNew = params.get('new') === '1';
   const requestedDate = params.get('date') || undefined;
-  const [asOverlay, setAsOverlay] = useState(() => window.matchMedia('(max-width: 1050px)').matches);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 1050px)');
-    const sync = (event: MediaQueryListEvent) => setAsOverlay(event.matches);
-    mediaQuery.addEventListener('change', sync);
-    return () => mediaQuery.removeEventListener('change', sync);
-  }, []);
-
   useEffect(() => {
     if (requestedNew) setShowCreate(true);
   }, [requestedNew]);
@@ -203,14 +194,9 @@ export function Jobs() {
           </section>
           
           {selectedJob ? (
-            asOverlay ? (
-              <div className="modal-scrim" onClick={() => setLocation('/jobs')}>
-                <div className="detail-overlay" onClick={(e) => e.stopPropagation()}>
-                  <button className="icon-button detail-overlay-close" onClick={() => setLocation('/jobs')} aria-label="Close job" data-testid="button-close-job-detail"><X size={17} /></button>
-                  <JobDetail job={selectedJob} />
-                </div>
-              </div>
-            ) : <JobDetail job={selectedJob} />
+            <DetailPane onClose={() => setLocation('/jobs')} label="Close job" testId="button-close-job-detail">
+              <JobDetail job={selectedJob} />
+            </DetailPane>
           ) : (
             <div className="panel detail-placeholder dot-grid">
               <ClipboardCheck size={28} />

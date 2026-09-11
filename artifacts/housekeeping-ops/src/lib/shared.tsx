@@ -1,5 +1,5 @@
-import { ReactNode } from 'react';
-import { LoaderCircle, AlertTriangle, Sparkles } from 'lucide-react';
+import { ReactNode, useEffect, useState } from 'react';
+import { LoaderCircle, AlertTriangle, Sparkles, X } from 'lucide-react';
 
 export function formatDate(value?: string | Date, options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }) {
   if (!value) return '—';
@@ -60,4 +60,37 @@ export function EmptyState({ title, body, action }: { title: string; body: strin
 
 export function PageIntro({ eyebrow, title, body, action }: { eyebrow: string; title: string; body?: string; action?: ReactNode }) {
   return <div className="page-intro animate-rise"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1>{body && <p>{body}</p>}</div>{action}</div>;
+}
+
+/** True while the viewport is too narrow for the master/detail layout to sit side by side. */
+export function useNarrowLayout(query = '(max-width: 1050px)') {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(query);
+    const sync = (event: MediaQueryListEvent) => setNarrow(event.matches);
+    mediaQuery.addEventListener('change', sync);
+    return () => mediaQuery.removeEventListener('change', sync);
+  }, [query]);
+
+  return narrow;
+}
+
+/**
+ * Side by side on a wide screen, a dismissible dialog on a narrow one. Without this the
+ * detail renders under a full-height list on a phone, and selecting a row looks like a
+ * dead tap — which it did on Jobs, Customers and Recurring alike.
+ */
+export function DetailPane({ onClose, label, testId, children }: { onClose: () => void; label: string; testId?: string; children: ReactNode }) {
+  const narrow = useNarrowLayout();
+  if (!narrow) return <>{children}</>;
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="detail-overlay" onClick={(event) => event.stopPropagation()}>
+        <button className="icon-button detail-overlay-close" onClick={onClose} aria-label={label} data-testid={testId}><X size={17} /></button>
+        {children}
+      </div>
+    </div>
+  );
 }

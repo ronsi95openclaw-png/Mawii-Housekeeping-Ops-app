@@ -8,7 +8,7 @@ import {
 import type { ServicePlan, Customer, Address, ServiceOccurrence } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Repeat, Plus, Pause, Play, Calendar, MapPin, X, ArrowRight, FastForward } from 'lucide-react';
-import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, formatDate, statusLabel } from '@/lib/shared';
+import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, DetailPane, formatDate, statusLabel } from '@/lib/shared';
 
 export function Recurring() {
   const queryClient = useQueryClient();
@@ -49,7 +49,9 @@ export function Recurring() {
             ))}
           </section>
           {selectedPlan ? (
-            <PlanDetail plan={selectedPlan} />
+            <DetailPane onClose={() => setSelectedPlan(null)} label="Close plan" testId="button-close-plan-detail">
+              <PlanDetail plan={selectedPlan} />
+            </DetailPane>
           ) : (
             <div className="panel detail-placeholder dot-grid">
               <Repeat size={28} />
