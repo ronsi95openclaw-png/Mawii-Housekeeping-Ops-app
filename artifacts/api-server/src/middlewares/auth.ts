@@ -1,7 +1,7 @@
 import type { RequestHandler } from "express";
 import { getAuth } from "@clerk/express";
 import { db, employeesTable } from "@workspace/db";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, like } from "drizzle-orm";
 
 export type AuthContext = { clerkUserId: string; role?: string };
 
@@ -25,13 +25,17 @@ export const attachAuth: RequestHandler = async (req, _res, next) => {
     let isFirstUserBootstrap = false;
     if (!employee) {
       const firstEmployee = (await db.select().from(employeesTable).orderBy(asc(employeesTable.id)).limit(1))[0];
-      if (!firstEmployee) {
+      // Dev fixtures and seeded rows keep the table non-empty, so "first user" means the
+      // first real Clerk sign-in (Clerk ids are `user_…`), not the first row in the table.
+      const linkedClerkUser = (await db.select().from(employeesTable).where(like(employeesTable.clerkUserId, "user\\_%")).limit(1))[0];
+      if (!firstEmployee || (auth.userId === clerkUserId && !linkedClerkUser)) {
         isFirstUserBootstrap = true;
         [employee] = await db.insert(employeesTable).values({
           clerkUserId,
           name: "Mawii Owner",
           role: "owner",
-        }).returning();
+        }).onConflictDoNothing().returning();
+        employee ??= (await db.select().from(employeesTable).where(eq(employeesTable.clerkUserId, clerkUserId)))[0];
       }
     }
 
