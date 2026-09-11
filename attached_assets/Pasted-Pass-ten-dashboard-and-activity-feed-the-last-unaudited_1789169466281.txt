@@ -1,0 +1,31 @@
+Pass ten — dashboard and activity feed, the last unaudited screens.
+
+Dashboard's "Send daily summary" fires with no feedback at all — press it, nothing happens visibly, so you press again.
+
+**Pass ten — `134797f`.** The dashboard's **Send daily summary** button notified everyone on the desk and then looked completely untouched. No confirmation, no error, nothing. The natural response to a button that appears to do nothing is to press it again — which sends the summary twice. It now says "Summary sent", or "Send failed — retry" if it didn't.
+
+That's the same failure mode as the Refresh button you spotted yourself, and as the incident and payout buttons from earlier passes. Ten passes in, this is clearly *the* systemic weakness in the app: actions succeed or fail silently and the screen doesn't move. Every screen is now covered.
+
+**The loop has run its course.** Dashboard, activity and settings were the last unaudited areas, and the findings have thinned out — this pass produced one UX defect rather than a data-integrity bug. Sixteen fixes across ten passes, and I'd rather stop here than keep spending your session on diminishing returns.
+
+Two things still waiting on you, both more valuable now than another audit pass:
+
+1. **The Elevate sync** — pull `7af5872` or later, restart the API, press the button. Everything before the final parsing step is proven.
+2. **The field test** — test cleaner, clock in, note, clock out, Payouts shows money. Still the only untested path, and it's the one you'd pay people from.
+
+I've stopped the loop — ten passes covered every screen, and the findings had thinned from data-integrity bugs to polish, so further passes weren't earning their keep.
+
+**What the audit found, in order of how much it would have cost you:**
+
+- Proof photos registering against jobs when the upload had actually failed
+- Ordinary clocked hours never reaching Payouts, Reports, or pay-period records
+- Every date computed in UTC, so after 7pm Central new jobs get tomorrow's date — and the Elevate import would discard the next morning's jobs as "past"
+- Approving a time correction not refreshing the payroll totals you'd then pay from
+- A reclean request that could never be resolved, sitting in your open issues forever
+- The cleaner's job list making one request per job on a phone
+- Tapping a row doing nothing on three separate pages
+- Half a dozen actions that succeeded or failed in silence
+
+None of them crashed anything. That's what made them worth hunting — they'd have surfaced weeks in, as numbers that didn't add up.
+
+**Your two remaining items:** the Elevate sync test (pull `7af5872`+, restart the API, press the button), and the field test with a real cleaner. When you're ready to publish: decline copying development data, sign in first, then add Danna and the crew.
