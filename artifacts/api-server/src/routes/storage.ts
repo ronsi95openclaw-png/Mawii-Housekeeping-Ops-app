@@ -1,13 +1,20 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "node:crypto";
-import { requireAuth } from "../middlewares/auth";
+import { isProofPhotoContentType, isProofPhotoSize } from "../lib/proof-photos";
+import { requireActiveEmployee } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
-router.post("/storage/uploads/request-url", requireAuth, async (req, res): Promise<void> => {
+router.post("/storage/uploads/request-url", requireActiveEmployee, async (req, res): Promise<void> => {
   const { name, size, contentType } = req.body ?? {};
-  if (typeof name !== "string" || !Number.isFinite(size) || typeof contentType !== "string") {
-    res.status(400).json({ error: "name, size and contentType are required" });
+  if (
+    typeof name !== "string" ||
+    !name.trim() ||
+    name.length > 255 ||
+    !isProofPhotoSize(size) ||
+    !isProofPhotoContentType(contentType)
+  ) {
+    res.status(400).json({ error: "A photo name, a supported image type, and an image no larger than 10 MB are required" });
     return;
   }
   const bucket = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;

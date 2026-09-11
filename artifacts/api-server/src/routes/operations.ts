@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Router, type IRouter } from "express";
-import { requireAuth, requireRole } from "../middlewares/auth";
+import { requireActiveEmployee, requireRole } from "../middlewares/auth";
 import { normalizeMessageIntent } from "../lib/messages";
 import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import {
@@ -40,7 +40,7 @@ router.use((req, res, next) => {
     next();
     return;
   }
-  requireAuth(req, res, next);
+  requireActiveEmployee(req, res, next);
 });
 let seedPromise: Promise<void> | null = null;
 
@@ -320,7 +320,7 @@ function hashBindingToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-router.get("/dashboard/summary", async (_req, res) => {
+router.get("/dashboard/summary", requireRole("owner", "manager"), async (_req, res) => {
   await ensureSeedData();
   const jobs = uniqueJobs(await db.select().from(jobsTable).orderBy(asc(jobsTable.scheduledDate), asc(jobsTable.startTime)));
   const today = dateOffset(0);
@@ -388,7 +388,7 @@ router.post("/dashboard/daily-summary", requireRole("owner", "manager"), async (
   res.status(201).json({ summaryDate: today, notifiedCount: owners.length, summary });
 });
 
-router.get("/activity", async (_req, res) => {
+router.get("/activity", requireRole("owner", "manager"), async (_req, res) => {
   await ensureSeedData();
   const events = await db.select().from(activityEventsTable).orderBy(desc(activityEventsTable.createdAt)).limit(50);
   res.json(events.map((event) => ({
@@ -726,7 +726,7 @@ router.post("/jobs/:id/messages", requireRole("owner", "manager"), async (req, r
   });
 });
 
-router.get("/team", async (_req, res) => {
+router.get("/team", requireRole("owner", "manager"), async (_req, res) => {
   await ensureSeedData();
   const members = uniqueMembers(await db.select().from(teamMembersTable).orderBy(asc(teamMembersTable.name)));
   res.json(members.map(mapMember));

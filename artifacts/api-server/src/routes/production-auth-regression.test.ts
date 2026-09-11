@@ -51,6 +51,23 @@ function expectStatus(result: { status: number; body: Json }, status: number) {
 }
 
 describe("production authentication boundary", () => {
+  it("does not accept caller-supplied development identities in a preview", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+    const { server, baseUrl } = await startServer();
+
+    try {
+      expectStatus(await request(baseUrl, "/employees", {
+        "x-dev-user-id": "dev-user",
+        "x-dev-role": "owner",
+      }), 401);
+    } finally {
+      if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
   it(
     "rejects dev fallbacks and unknown identities while honoring stored employee roles",
     async () => {

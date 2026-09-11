@@ -2,13 +2,14 @@ import { Router, type IRouter } from "express";
 import crypto, { createHash, randomBytes } from "node:crypto";
 import { and, eq, gte, lte, asc, desc, inArray, isNull } from "drizzle-orm";
 import { db, customersTable, addressesTable, servicePlansTable, serviceOccurrencesTable, employeesTable, employeeBindingTokensTable, employeeJobNotesTable, jobAssignmentsTable, timeEntriesTable, proofPhotosTable, incidentsTable, incidentHistoryTable, workerRatesTable, payPeriodsTable, payoutRecordsTable, activityEventsTable, messagesTable, notificationsTable, jobsTable } from "@workspace/db";
-import { requireAuth, requireRole } from "../middlewares/auth";
+import { requireActiveEmployee, requireAuth, requireRole } from "../middlewares/auth";
 import { generateOccurrences } from "../lib/recurrence";
 import { calculatePayoutCents, calculateWorkedMinutes } from "../lib/time-entries";
 import { formatPayoutAmountCents, parsePayoutAmountCents } from "../lib/payouts";
 import { canCompleteJob, canTransitionIncident, canTransitionPayPeriod, isChronologicalTimeEntry, isValidBreakMinutes, isValidCorrectionMinutes } from "../lib/operations-rules";
 import { canCleanerAccessJob } from "../lib/job-access";
 import { employeeForClerkUser, notifyEmployees, notifyAssignedCleaners } from "../lib/notifications";
+import { isProofPhotoContentType, isProofPhotoObjectPath, isProofPhotoSize } from "../lib/proof-photos";
 
 const router: IRouter = Router();
 router.use((req, res, next) => {
@@ -16,7 +17,11 @@ router.use((req, res, next) => {
     next();
     return;
   }
-  requireAuth(req, res, next);
+  if (req.method === "POST" && req.path === "/employees/claim") {
+    requireAuth(req, res, next);
+    return;
+  }
+  requireActiveEmployee(req, res, next);
 });
 const id = (value: string | string[]) => Number.parseInt(Array.isArray(value) ? value[0]! : value, 10);
 const body = (req: any) => req.body ?? {};
@@ -256,9 +261,14 @@ router.post("/jobs/:jobId/complete", async (req, res) => {
 
 router.post("/jobs/:jobId/photos", async (req, res) => {
   const input = body(req);
-  if (!input.objectPath || !["before", "after"].includes(input.kind)) { res.status(400).json({ error: "objectPath and kind(before|after) are required" }); return; }
+  if (
+    !isProofPhotoObjectPath(input.objectPath) ||
+    !["before", "after"].includes(input.kind) ||
+    !isProofPhotoContentType(input.contentType) ||
+    !isProofPhotoSize(input.byteSize)
+  ) { res.status(400).json({ error: "A valid uploaded proof photo, type, size, and kind(before|after) are required" }); return; }
   if (!(await canAccessJob(req, id(req.params.jobId)))) { res.status(403).json({ error: "Job is not assigned to you" }); return; }
-  const [photo] = await db.insert(proofPhotosTable).values({ jobId: id(req.params.jobId), kind: input.kind, objectPath: input.objectPath, contentType: input.contentType ?? "image/jpeg", byteSize: input.byteSize }).returning(); res.status(201).json(photo);
+  const [photo] = await db.insert(proofPhotosTable).values({ jobId: id(req.params.jobId), kind: input.kind, objectPath: input.objectPath, contentType: input.contentType, byteSize: input.byteSize }).returning(); res.status(201).json(photo);
 });
 router.get("/jobs/:jobId/photos", async (req, res) => { if (!(await canAccessJob(req, id(req.params.jobId)))) { res.status(403).json({ error: "Job is not assigned to you" }); return; } res.json((await db.select().from(proofPhotosTable).where(eq(proofPhotosTable.jobId, id(req.params.jobId)))).map(photo => ({ ...photo, readUrl: `/api/storage/objects${photo.objectPath.replace("/objects", "")}` }))); });
 router.post("/jobs/:jobId/incidents", async (req, res) => { const jobId = id(req.params.jobId); if (!(await canAccessJob(req, jobId))) { res.status(403).json({ error: "Job is not assigned to you" }); return; } const employee = await currentEmployee(req); const input = body(req); if (!["low", "medium", "high", "critical"].includes(input.severity ?? "medium") || !input.description) { res.status(400).json({ error: "severity and description are required" }); return; } const [incident] = await db.insert(incidentsTable).values({ jobId, type: input.type ?? "qa", severity: input.severity ?? "medium", description: input.description, evidencePhotoIds: input.evidencePhotoIds ?? [], reporterEmployeeId: employee?.id }).returning(); await db.insert(incidentHistoryTable).values({ incidentId: incident.id, toStatus: "open", actorClerkUserId: req.authContext?.clerkUserId }); res.status(201).json({ ...incident, history: [{ toStatus: "open" }] }); });

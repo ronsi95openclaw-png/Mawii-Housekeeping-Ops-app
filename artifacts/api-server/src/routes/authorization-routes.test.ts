@@ -76,6 +76,15 @@ describe("production route authorization", () => {
         expectStatus(await request(baseUrl, "/reports/owner?start=2026-09-12&end=2026-09-12", {
           headers: { "x-dev-user-id": unknownUserId },
         }), 403);
+        expectStatus(await request(baseUrl, "/jobs", {
+          headers: { "x-dev-user-id": unknownUserId },
+        }), 403);
+        expectStatus(await request(baseUrl, "/dashboard/summary", {
+          headers: { "x-dev-user-id": unknownUserId },
+        }), 403);
+        expectStatus(await request(baseUrl, "/team", {
+          headers: { "x-dev-user-id": unknownUserId },
+        }), 403);
 
         const manager = expectStatus(await request(baseUrl, "/employees", {
           method: "POST",
@@ -160,6 +169,15 @@ describe("production route authorization", () => {
           headers: { "x-dev-user-id": assignedCleanerUserId },
         }), 403);
         expectStatus(await request(baseUrl, `/reports/owner?start=2026-09-12&end=2026-09-12`, {
+          headers: { "x-dev-user-id": assignedCleanerUserId },
+        }), 403);
+        expectStatus(await request(baseUrl, "/dashboard/summary", {
+          headers: { "x-dev-user-id": assignedCleanerUserId },
+        }), 403);
+        expectStatus(await request(baseUrl, "/activity", {
+          headers: { "x-dev-user-id": assignedCleanerUserId },
+        }), 403);
+        expectStatus(await request(baseUrl, "/team", {
           headers: { "x-dev-user-id": assignedCleanerUserId },
         }), 403);
 

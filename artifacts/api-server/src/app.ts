@@ -28,7 +28,10 @@ app.use(
     },
   }),
 );
-app.use(cors());
+// The deployed web app and API share one origin. Development still allows the
+// local Vite server, but production never grants another website browser access
+// to authenticated API responses.
+app.use(cors({ origin: process.env.NODE_ENV === "production" ? false : true }));
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(clerkMiddleware());
 app.use(express.json());
