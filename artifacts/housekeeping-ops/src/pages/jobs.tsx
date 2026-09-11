@@ -10,7 +10,7 @@ import {
 import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, ChevronRight, ClipboardCheck, MapPin, Check, MessageSquare, Phone, CheckCircle2, Send, X, ArrowRight, AlertTriangle, LoaderCircle, RefreshCw, Edit2 } from 'lucide-react';
-import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, whatsappUrl, todayISO } from '@/lib/shared';
+import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, todayISO } from '@/lib/shared';
 
 const SERVICE_OPTIONS = ['Standard cleaning', 'Deep cleaning', 'Move In/Out cleaning'];
 
@@ -372,7 +372,6 @@ function JobDetail({ job }: { job: Job }) {
   const [message, setMessage] = useState('');
   const [reminderTitle, setReminderTitle] = useState('');
   const [reminderBody, setReminderBody] = useState('');
-  const [whatsappTemplate, setWhatsappTemplate] = useState<'assignment' | 'reminder' | 'schedule' | 'job'>('job');
   const [editing, setEditing] = useState(false);
 
   const current = detail.data || job;
@@ -458,31 +457,11 @@ function JobDetail({ job }: { job: Job }) {
           <div><span className="eyebrow">Crew</span><h3>Assigned team</h3></div>
           <button className="text-button" onClick={() => patch({ employeeIds: [] })} data-testid="button-clear-team">Clear team</button>
         </div>
-        <label style={{ display: 'block', marginBottom: '10px', fontSize: '10px' }}>
-          Owner-triggered WhatsApp template
-          <select value={whatsappTemplate} onChange={(e) => setWhatsappTemplate(e.target.value as typeof whatsappTemplate)} style={{ display: 'block', width: '100%', marginTop: '5px' }}>
-            <option value="assignment">Assignment</option>
-            <option value="reminder">Reminder</option>
-            <option value="schedule">Schedule update</option>
-            <option value="job">Job update</option>
-          </select>
-        </label>
         <div className="assigned-team">
            {current.assignedEmployees?.length ? current.assignedEmployees.map((member) => (
             <div className="assigned-member" key={member.id}>
               <Avatar member={member} />
               <div><strong>{member.name}</strong><span>{member.role}</span></div>
-              <a
-                 href={whatsappUrl(member.phone ?? '', whatsappMessage(whatsappTemplate, member.name, current))}
-                target="_blank"
-                rel="noreferrer"
-                className="button button-secondary"
-                style={{ height: '28px', padding: '0 8px', fontSize: '9px' }}
-                data-testid={`link-whatsapp-team-${member.id}`}
-                aria-label={`Owner-triggered WhatsApp for ${member.name}`}
-              >
-                <MessageSquare size={13} /> Owner-triggered WhatsApp
-              </a>
                <a href={`tel:${member.phone ?? ''}`} className="icon-button" data-testid={`link-call-team-${member.id}`} aria-label={`Call ${member.name}`}><Phone size={14} /></a>
             </div>
           )) : (
@@ -585,14 +564,3 @@ function JobDetail({ job }: { job: Job }) {
   );
 }
 
-function whatsappMessage(
-  template: 'assignment' | 'reminder' | 'schedule' | 'job',
-  memberName: string,
-  job: Job,
-) {
-  const greeting = `Hi ${memberName},`;
-  if (template === 'assignment') return `${greeting} you're assigned to ${job.clientName}'s ${job.serviceType} job on ${formatDate(job.scheduledDate)} at ${formatTime(job.startTime)}.`;
-  if (template === 'reminder') return `${greeting} reminder for ${job.clientName}'s ${job.serviceType} job on ${formatDate(job.scheduledDate)} at ${formatTime(job.startTime)}.`;
-  if (template === 'schedule') return `${greeting} schedule update: ${job.clientName}'s job is on ${formatDate(job.scheduledDate)} from ${formatTime(job.startTime)} to ${formatTime(job.endTime)}.`;
-  return `${greeting} job update for ${job.clientName}: ${job.serviceType} at ${job.address}.`;
-}

@@ -31,11 +31,6 @@ export function initials(member: { initials?: string; name: string }) {
   return member.initials || member.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase(); 
 }
 
-export function whatsappUrl(phone: string, message?: string) {
-  const digits = phone.replace(/\D/g, '');
-  return `https://wa.me/${digits}${message ? `?text=${encodeURIComponent(message)}` : ''}`;
-}
-
 export function Avatar({ member, size = 'md' }: { member?: { id?: number; name: string; initials?: string }; size?: 'sm' | 'md' | 'lg' }) {
   return <span data-testid={`avatar-${member?.id ?? 'fallback'}`} className={`avatar avatar-${size}`}>{member ? initials(member) : '—'}</span>;
 }
