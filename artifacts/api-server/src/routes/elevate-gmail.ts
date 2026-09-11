@@ -19,20 +19,39 @@ const SERVER_STARTED_AT = new Date(Date.now() - Math.round(process.uptime() * 10
 
 type GmailPart = { mimeType?: string; body?: { data?: string }; parts?: GmailPart[]; headers?: Array<{ name?: string; value?: string }> };
 
-/** Gmail returns the body base64url encoded, nested wherever the sender felt like putting it. */
+/**
+ * Picks the part of the message that actually holds the schedule. Elevate's plain text part
+ * contains only the preview line ("Bookings for tomorrow"), with the real content in HTML,
+ * so preferring text/plain returned something useless.
+ */
+function decodeBody(data?: string): string {
+  return data ? Buffer.from(data.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8") : "";
+}
+
+function collectCandidates(payload: GmailPart | undefined, found: string[] = []): string[] {
+  if (!payload) return found;
+  if (payload.mimeType === "text/plain" && payload.body?.data) found.push(decodeBody(payload.body.data));
+  if (payload.mimeType === "text/html" && payload.body?.data) found.push(htmlToText(decodeBody(payload.body.data)));
+  for (const part of payload.parts ?? []) collectCandidates(part, found);
+  return found;
+}
+
+/** A schedule mentions its labels and a time window; a preheader mentions neither. */
+function scheduleScore(text: string): number {
+  let score = 0;
+  if (/location\s*:/i.test(text)) score += 2;
+  if (/client\s*:/i.test(text)) score += 2;
+  if (/appointment\s*:/i.test(text)) score += 2;
+  if (/\d{1,2}:\d{2}\s*[AaPp]\.?[Mm]/.test(text)) score += 3;
+  return score;
+}
+
 function extractPlainText(payload: GmailPart | undefined): string {
-  if (!payload) return "";
-  const decode = (data?: string) => (data ? Buffer.from(data.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8") : "");
-  if (payload.mimeType === "text/plain" && payload.body?.data) return decode(payload.body.data);
-  for (const part of payload.parts ?? []) {
-    const found = extractPlainText(part);
-    if (found) return found;
-  }
-  // Fall back to the HTML body, since Elevate's mail may carry no plain text part.
-  if (payload.mimeType === "text/html" && payload.body?.data) {
-    return htmlToText(decode(payload.body.data));
-  }
-  return "";
+  const candidates = collectCandidates(payload).filter((text) => text.trim());
+  if (!candidates.length) return "";
+  return candidates
+    .map((text) => ({ text, score: scheduleScore(text), length: text.length }))
+    .sort((a, b) => b.score - a.score || b.length - a.length)[0]!.text;
 }
 
 /** Elevate's mail is table-based HTML, so every block boundary has to become a newline. */
