@@ -58,9 +58,15 @@ export function Jobs() {
     setSyncing(true);
     setSyncResult(null);
     try {
-      const response = await fetch('/api/integrations/elevate/gmail-sync', { method: 'POST' });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result?.detail ?? result?.error ?? `HTTP ${response.status}`);
+      const response = await fetch('/api/integrations/elevate/gmail-sync', { method: 'POST', headers: { accept: 'application/json' } });
+      // Read as text first: an empty or non-JSON body (a proxy error page, a redirect) made
+      // response.json() throw a browser-level message that described nothing.
+      const raw = await response.text();
+      let result: any = null;
+      try { result = raw ? JSON.parse(raw) : null; } catch { /* handled below */ }
+      if (!response.ok || !result) {
+        throw new Error(result?.detail ?? result?.error ?? `HTTP ${response.status} ${response.statusText}${raw ? ` — ${raw.slice(0, 200)}` : ' — empty response'}`);
+      }
       const problems = (result.problems ?? []) as string[];
       setSyncResult(
         `${result.created} new job${result.created === 1 ? '' : 's'} imported from ${result.scanned} email${result.scanned === 1 ? '' : 's'}`
