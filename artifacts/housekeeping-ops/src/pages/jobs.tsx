@@ -49,6 +49,32 @@ export function Jobs() {
 
   const [query, setQuery] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  // Called directly rather than through a generated hook: the endpoint is newer than the
+  // last codegen run. Swap to useSyncElevateMailbox once the client is regenerated.
+  const runMailboxSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const response = await fetch('/api/integrations/elevate/gmail-sync', { method: 'POST' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result?.error ?? 'Sync failed');
+      const problems = (result.problems ?? []) as string[];
+      setSyncResult(
+        `${result.created} new job${result.created === 1 ? '' : 's'} imported from ${result.scanned} email${result.scanned === 1 ? '' : 's'}`
+        + (result.alreadyImported ? `, ${result.alreadyImported} already here` : '')
+        + (problems.length ? `. ${problems.length} could not be read.` : '.'),
+      );
+      void queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+      void elevate.refetch();
+    } catch (error) {
+      setSyncResult(`Could not read the Elevate mailbox. ${error instanceof Error ? error.message : ''}`.trim());
+    } finally {
+      setSyncing(false);
+    }
+  };
   const [filter, setFilter] = useState(() => new URLSearchParams(window.location.search).get('filter') || 'all');
 
   // wouter's location is the pathname only — the query string lives in useSearch().
@@ -121,7 +147,13 @@ export function Jobs() {
             ))}
           </div>
         ) : null}
-        <button className="button button-secondary" onClick={() => void elevate.refetch()} disabled={elevate.isFetching} data-testid="button-refresh-elevate-imports"><RefreshCw size={14} />Refresh</button>
+        <div className="team-actions">
+          <button className="button button-primary" onClick={() => void runMailboxSync()} disabled={syncing} data-testid="button-sync-elevate-mailbox">
+            {syncing ? <><LoaderCircle size={14} className="spin" />Checking…</> : <><RefreshCw size={14} />Check Elevate email</>}
+          </button>
+          <button className="button button-secondary" onClick={() => void elevate.refetch()} disabled={elevate.isFetching} data-testid="button-refresh-elevate-imports"><RefreshCw size={14} />Refresh</button>
+        </div>
+        {syncResult ? <p className={syncResult.startsWith('Could not') ? 'form-error' : 'muted-copy'} data-testid="text-sync-result">{syncResult}</p> : null}
       </section>
       
       <section className="panel jobs-toolbar">
