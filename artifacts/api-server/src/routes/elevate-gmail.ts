@@ -13,6 +13,9 @@ const router: IRouter = Router();
 const SENDER = "hello@elevatedliving.com";
 const buildQuery = (days: number) => `from:${SENDER} subject:schedule newer_than:${days}d`;
 const SOURCE = "elevate_email";
+// When this server started. A stale bundle is the most common cause of a "fix" not landing,
+// and this makes that visible from the phone instead of guessable.
+const SERVER_STARTED_AT = new Date(Date.now() - Math.round(process.uptime() * 1000)).toISOString();
 
 type GmailPart = { mimeType?: string; body?: { data?: string }; parts?: GmailPart[]; headers?: Array<{ name?: string; value?: string }> };
 
@@ -82,7 +85,7 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
     const list = await gmail(`/gmail/v1/users/me/messages?q=${encodeURIComponent(buildQuery(days))}&maxResults=25`);
     const messages: Array<{ id: string }> = list?.messages ?? [];
     if (!messages.length) {
-      res.json({ scanned: 0, created: 0, alreadyImported: 0, skippedPast: 0, problems: [] });
+      res.json({ scanned: 0, created: 0, alreadyImported: 0, skippedPast: 0, problems: [], serverStartedAt: SERVER_STARTED_AT });
       return;
     }
 
@@ -157,7 +160,7 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
       }))));
     }
 
-    res.json({ scanned: messages.length, created: created.length, alreadyImported, skippedPast, problems });
+    res.json({ scanned: messages.length, created: created.length, alreadyImported, skippedPast, problems, serverStartedAt: SERVER_STARTED_AT });
   } catch (error) {
     req.log?.error({ err: error }, "Elevate Gmail sync failed");
     // This route is owner/manager only and the detail is what makes a connector failure
