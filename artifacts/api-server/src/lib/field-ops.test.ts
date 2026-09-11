@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateOccurrences } from "./recurrence";
-import { calculateWorkedMinutes, calculatePayoutCents } from "./time-entries";
+import { calculatePayableMinutes, calculateWorkedMinutes, calculatePayoutCents } from "./time-entries";
 import { canManageOperations, canAccessAssignedJob } from "./authorization";
 import { payoutCsv, summarizeApprovedPayouts } from "./payouts";
 import { normalizeMessageIntent } from "./messages";
@@ -22,6 +22,18 @@ describe("field operations services", () => {
   it("subtracts breaks and applies approved correction", () => {
     expect(calculateWorkedMinutes({ clockIn: new Date("2026-01-01T09:00Z"), clockOut: new Date("2026-01-01T12:00Z"), breaksMinutes: 15, correctionMinutes: 10 })).toBe(175);
     expect(calculatePayoutCents(120, 20)).toBe(4000);
+  });
+  it("counts only payable correction minutes", () => {
+    const base = {
+      clockIn: new Date("2026-01-01T09:00Z"),
+      clockOut: new Date("2026-01-01T10:30Z"),
+      correctionMinutes: 15,
+    };
+    expect(calculatePayableMinutes({ ...base, correctionStatus: "none" })).toBe(90);
+    expect(calculatePayableMinutes({ ...base, correctionStatus: "approved" })).toBe(105);
+    expect(calculatePayableMinutes({ ...base, correctionStatus: "rejected" })).toBe(90);
+    expect(calculatePayableMinutes({ ...base, correctionStatus: "pending" })).toBe(90);
+    expect(calculatePayableMinutes({ clockIn: base.clockIn, correctionStatus: "approved" })).toBe(0);
   });
   it("enforces role and assignment boundaries", () => {
     expect(canManageOperations("manager")).toBe(true);
