@@ -119,7 +119,10 @@ function EmployeeDialog({ onClose, onSubmit, pending, initialData }: { onClose: 
         </div>
         <div className="form-stack">
           <label>Full name<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="input-team-name" /></label>
-           {form.role !== 'cleaner' && <label>Clerk User ID (for auth linkage)<input required value={form.clerkUserId} onChange={(e) => setForm({ ...form, clerkUserId: e.target.value })} placeholder="user_2X..." /></label>}
+           {form.role !== 'cleaner' && <>
+             <label>Clerk User ID (for auth linkage)<input required value={form.clerkUserId} onChange={(e) => setForm({ ...form, clerkUserId: e.target.value })} placeholder="user_2X..." /></label>
+             {!initialData && <p className="muted-copy">Have them sign up first. The connect screen they land on shows their user ID with a copy button — paste it here.</p>}
+           </>}
            {form.role === 'cleaner' && !initialData && <p className="muted-copy">The cleaner will securely link their own Clerk account with a one-time code after you save this profile.</p>}
           <label>System Role
             <select required value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as EmployeeInputRole })}>
