@@ -435,6 +435,12 @@ paths:
     get:
       operationId: listEmployees
       tags: [field-ops]
+      parameters:
+        - name: includeInactive
+          in: query
+          required: false
+          schema: { type: string, enum: ["true"] }
+          description: Include deactivated employees so they can be reviewed and restored.
       responses: { "200": { description: Employees, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Employee" } } } } } }
     post:
       operationId: createEmployee
@@ -1291,6 +1297,7 @@ components:
         name: { type: string }
         role: { type: string, enum: [owner, manager, cleaner] }
         phone: { type: ["string", "null"] }
+        active: { type: string }
         bindingToken: { type: ["string", "null"] }
     EmployeeInput:
       type: object

@@ -161,7 +161,13 @@ router.get("/employees/me", async (req, res) => {
   const employee = req.authContext ? (await db.select().from(employeesTable).where(eq(employeesTable.clerkUserId, req.authContext.clerkUserId)))[0] : undefined;
   if (!employee || employee.active !== "true") { res.status(403).json({ error: "No active employee profile is linked to this Clerk user" }); return; } res.json(employee);
 });
-router.get("/employees", requireRole("owner", "manager"), async (_req, res) => res.json(await db.select().from(employeesTable).where(eq(employeesTable.active, "true"))));
+// Deactivated employees are hidden by default so assignment pickers stay clean, but the
+// Team page asks for them explicitly — otherwise a revoked person is unreachable forever.
+router.get("/employees", requireRole("owner", "manager"), async (req, res) => res.json(
+  req.query.includeInactive === "true"
+    ? await db.select().from(employeesTable).orderBy(asc(employeesTable.id))
+    : await db.select().from(employeesTable).where(eq(employeesTable.active, "true")),
+));
 router.post("/employees", requireRole("owner"), async (req, res) => {
   const input = body(req);
   if (!input.name) { res.status(400).json({ error: "name is required" }); return; }
