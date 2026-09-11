@@ -38,10 +38,19 @@ function extractPlainText(payload: GmailPart | undefined): string {
 }
 
 async function gmail(path: string): Promise<any> {
-  const { ReplitConnectors } = await import("@replit/connectors-sdk");
-  const connectors = new ReplitConnectors();
+  const sdk: any = await import("@replit/connectors-sdk");
+  const Connectors = sdk.ReplitConnectors ?? sdk.default?.ReplitConnectors ?? sdk.Connectors;
+  if (typeof Connectors !== "function") {
+    throw new Error(`Connector SDK exports ${Object.keys(sdk).join(", ") || "nothing usable"}`);
+  }
+  const connectors = new Connectors();
   const response = await connectors.proxy("google-mail", path);
-  if (typeof response?.json === "function") return response.json();
+  if (response && typeof response.json === "function") {
+    if (typeof response.ok === "boolean" && !response.ok) {
+      throw new Error(`Gmail returned ${response.status} for ${path}: ${(await response.text()).slice(0, 300)}`);
+    }
+    return response.json();
+  }
   return response;
 }
 
@@ -137,7 +146,12 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
     res.json({ scanned: messages.length, created: created.length, alreadyImported, skippedPast, problems });
   } catch (error) {
     req.log?.error({ err: error }, "Elevate Gmail sync failed");
-    res.status(502).json({ error: "Mawii could not read the Elevate schedule mailbox. Check the Gmail connection in Replit." });
+    // This route is owner/manager only and the detail is what makes a connector failure
+    // diagnosable from the phone rather than the server log.
+    res.status(502).json({
+      error: "Mawii could not read the Elevate schedule mailbox. Check the Gmail connection in Replit.",
+      detail: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    });
   }
 });
 

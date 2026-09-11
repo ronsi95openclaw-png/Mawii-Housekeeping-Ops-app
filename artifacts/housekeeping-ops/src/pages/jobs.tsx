@@ -60,7 +60,7 @@ export function Jobs() {
     try {
       const response = await fetch('/api/integrations/elevate/gmail-sync', { method: 'POST' });
       const result = await response.json();
-      if (!response.ok) throw new Error(result?.error ?? 'Sync failed');
+      if (!response.ok) throw new Error(result?.detail ?? result?.error ?? `HTTP ${response.status}`);
       const problems = (result.problems ?? []) as string[];
       setSyncResult(
         `${result.created} new job${result.created === 1 ? '' : 's'} imported from ${result.scanned} email${result.scanned === 1 ? '' : 's'}`
