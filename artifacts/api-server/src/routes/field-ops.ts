@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
 import crypto, { createHash, randomBytes } from "node:crypto";
-import { and, eq, gte, lte, asc, desc, inArray, isNull } from "drizzle-orm";
+import { and, eq, ne, gte, lte, asc, desc, inArray, isNull } from "drizzle-orm";
 import { db, customersTable, addressesTable, servicePlansTable, serviceOccurrencesTable, employeesTable, employeeBindingTokensTable, employeeJobNotesTable, jobAssignmentsTable, timeEntriesTable, proofPhotosTable, incidentsTable, incidentHistoryTable, workerRatesTable, payPeriodsTable, payoutRecordsTable, activityEventsTable, messagesTable, notificationsTable, jobsTable } from "@workspace/db";
 import { requireActiveEmployee, requireAuth, requireRole } from "../middlewares/auth";
 import { generateOccurrences } from "../lib/recurrence";
-import { calculatePayoutCents, calculateWorkedMinutes } from "../lib/time-entries";
+import { calculatePayableMinutes, calculatePayoutCents, calculateWorkedMinutes } from "../lib/time-entries";
 import { formatPayoutAmountCents, parsePayoutAmountCents } from "../lib/payouts";
 import { canCompleteJob, canTransitionIncident, canTransitionPayPeriod, isChronologicalTimeEntry, isValidBreakMinutes, isValidCorrectionMinutes } from "../lib/operations-rules";
 import { canCleanerAccessJob } from "../lib/job-access";
@@ -279,13 +279,14 @@ router.post("/worker-rates", requireRole("owner"), async (req, res) => { const [
 router.get("/payouts", requireRole("owner", "manager"), async (req, res) => {
   const start = new Date(String(req.query.start));
   const end = new Date(String(req.query.end));
-  const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, start), lte(timeEntriesTable.clockIn, end), eq(timeEntriesTable.correctionStatus, "approved")));
+  // Ordinary shifts are payable as clocked; only an unresolved correction holds an entry back.
+  const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, start), lte(timeEntriesTable.clockIn, end), ne(timeEntriesTable.correctionStatus, "pending")));
   const employees = await db.select().from(employeesTable);
   const rates = await db.select().from(workerRatesTable);
   const periods = await db.select().from(payPeriodsTable);
   const records = await db.select().from(payoutRecordsTable);
   const exportRows = entries.map(entry => {
-    const minutes = entry.clockOut ? calculateWorkedMinutes(entry) : 0;
+    const minutes = calculatePayableMinutes(entry);
     const rate = rates.find(r => r.employeeId === entry.employeeId);
     const worker = employees.find(e => e.id === entry.employeeId);
     const period = periods.find(candidate => entry.clockIn >= new Date(`${candidate.startsOn}T00:00:00Z`) && entry.clockIn <= new Date(`${candidate.endsOn}T23:59:59Z`));
@@ -387,13 +388,13 @@ router.get("/reports/owner", requireRole("owner", "manager"), async (req, res) =
   const incidents = await db.select().from(incidentsTable).where(and(gte(incidentsTable.createdAt, reportStart), lte(incidentsTable.createdAt, reportEnd)));
   const plans = await db.select().from(servicePlansTable);
   const employees = await db.select().from(employeesTable);
-  const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, reportStart), lte(timeEntriesTable.clockIn, reportEnd), eq(timeEntriesTable.correctionStatus, "approved")));
+  const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, reportStart), lte(timeEntriesTable.clockIn, reportEnd), ne(timeEntriesTable.correctionStatus, "pending")));
   const rates = await db.select().from(workerRatesTable);
   const periods = await db.select().from(payPeriodsTable);
   const payoutRecords = await db.select().from(payoutRecordsTable);
   const labor = new Map<number, { approvedMinutes: number; baseCents: number }>();
   for (const entry of entries) {
-    const minutes = entry.clockOut ? calculateWorkedMinutes(entry) : 0;
+    const minutes = calculatePayableMinutes(entry);
     const rate = rates.find(item => item.employeeId === entry.employeeId);
     const current = labor.get(entry.employeeId) ?? { approvedMinutes: 0, baseCents: 0 };
     current.approvedMinutes += minutes;
