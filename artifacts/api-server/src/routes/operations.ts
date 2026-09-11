@@ -645,6 +645,18 @@ router.post("/integrations/elevate/jobs", async (req, res): Promise<void> => {
   }
 
   const appointment = parsed.data;
+  const calculatedEnd =
+    appointment.endDateTime
+      ?? new Date(appointment.dateTime.getTime() + (appointment.durationMinutes ?? 60) * 60_000);
+  if (calculatedEnd.getTime() <= appointment.dateTime.getTime()) {
+    req.log.warn(
+      { externalId: appointment.appointmentId },
+      "Rejected Elevate OS appointment with a non-positive duration",
+    );
+    res.status(422).json({ error: "Appointment end must be later than appointment start" });
+    return;
+  }
+
   const members = uniqueMembers(await db.select().from(teamMembersTable));
   const workerName = appointment.assignedWorker?.trim();
   const matchedWorker = workerName
@@ -655,8 +667,6 @@ router.post("/integrations/elevate/jobs", async (req, res): Promise<void> => {
       ? [`Assigned worker "${workerName}" does not match anyone in the Mawii team roster`]
       : [];
   const startsAt = timeParts(appointment.dateTime);
-  const calculatedEnd = appointment.endDateTime
-    ?? new Date(appointment.dateTime.getTime() + (appointment.durationMinutes ?? 60) * 60_000);
   const endsAt = timeParts(calculatedEnd);
   const importedStatus =
     appointment.status === "completed"

@@ -224,10 +224,10 @@ describe("Elevate import regression", () => {
         });
 
         const events = await db.select().from(jobImportEventsTable).where(like(jobImportEventsTable.externalId, `${token}%`));
-        expect(events).toHaveLength(6);
+        expect(events).toHaveLength(5);
         expect(events.filter((event) => event.success && !event.duplicate)).toHaveLength(3);
         expect(events.filter((event) => event.success && event.duplicate)).toHaveLength(1);
-        expect(events.filter((event) => !event.success)).toHaveLength(2);
+        expect(events.filter((event) => !event.success)).toHaveLength(1);
         expect(events.find((event) => event.externalId === normalPayload.appointmentId && event.duplicate)).toMatchObject({
           success: true,
           duplicate: true,
@@ -238,11 +238,7 @@ describe("Elevate import regression", () => {
           duplicate: false,
           jobId: null,
         });
-        expect(events.find((event) => event.externalId === semanticPayload.appointmentId)).toMatchObject({
-          success: false,
-          duplicate: false,
-          jobId: null,
-        });
+        expect(events.filter((event) => event.externalId === semanticPayload.appointmentId)).toHaveLength(0);
         expect(await db.select().from(jobsTable).where(eq(jobsTable.externalId, semanticPayload.appointmentId))).toHaveLength(0);
 
         const afterStatus = expectStatus(await request(baseUrl, "/integrations/elevate/status", {
@@ -254,13 +250,12 @@ describe("Elevate import regression", () => {
           recentEvents: Array<{ externalId: string | null; success: boolean; duplicate: boolean }>;
         };
         expect(afterStatus.configured).toBe(true);
-        expect(afterStatus.totalReceived).toBe(beforeStatus.totalReceived + 6);
-        expect(afterStatus.failedCount).toBe(beforeStatus.failedCount + 2);
+        expect(afterStatus.totalReceived).toBe(beforeStatus.totalReceived + 5);
+        expect(afterStatus.failedCount).toBe(beforeStatus.failedCount + 1);
         expect(afterStatus.recentEvents).toEqual(expect.arrayContaining([
           expect.objectContaining({ externalId: normalPayload.appointmentId, success: true, duplicate: false }),
           expect.objectContaining({ externalId: normalPayload.appointmentId, success: true, duplicate: true }),
           expect.objectContaining({ externalId: malformedPayload.appointmentId, success: false, duplicate: false }),
-          expect.objectContaining({ externalId: semanticPayload.appointmentId, success: false, duplicate: false }),
         ]));
       } finally {
         if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
