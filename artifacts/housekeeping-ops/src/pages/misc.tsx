@@ -2,7 +2,8 @@ import { useState, useRef } from 'react';
 import { 
   useListActivityHistory, useListJobs, useListIncidents, useReviewIncident, 
   useListEmployees, useCreateWorkerRate, useListPayouts, useListTimeEntries, useApproveTimeCorrection, useRejectTimeCorrection,
-  useListPayPeriods, useCreatePayPeriod, useApprovePayPeriod, useMarkPayPeriodPaid, useAddPayoutAdjustment, useGetOwnerReport
+  useListPayPeriods, useCreatePayPeriod, useApprovePayPeriod, useMarkPayPeriodPaid, useAddPayoutAdjustment, useGetOwnerReport,
+  getListPayPeriodsQueryKey, getListPayoutsQueryKey
 } from '@workspace/api-client-react';
 import { PageIntro, LoadingState, ErrorState, EmptyState, formatDate, statusTone, Badge, statusLabel, formatTime } from '@/lib/shared';
 import { AlertTriangle, Activity as ActivityIcon, ShieldCheck, Check, DollarSign, Download } from 'lucide-react';
@@ -145,7 +146,7 @@ export function Payouts() {
   const initialEnd = now.toISOString().slice(0, 10);
   const [start, setStart] = useState(initialStart);
   const [end, setEnd] = useState(initialEnd);
-  const employees = useListEmployees();
+  const employees = useListEmployees({ includeInactive: 'true' });
   const payouts = useListPayouts({ start, end });
   const periods = useListPayPeriods();
   const createPeriod = useCreatePayPeriod();
@@ -167,7 +168,7 @@ export function Payouts() {
 
   const handleCreatePeriod = () => {
     createPeriod.mutate({ data: { startsOn: start, endsOn: end } }, {
-      onSuccess: () => void qc.invalidateQueries({ queryKey: ['/api/pay-periods'] }),
+      onSuccess: () => void qc.invalidateQueries({ queryKey: getListPayPeriodsQueryKey() }),
     });
   };
 
@@ -178,7 +179,7 @@ export function Payouts() {
     const reason = window.prompt('Reason for this adjustment:');
     if (!reason?.trim()) return;
     addAdjustment.mutate({ id: currentPeriod.id, data: { employeeId, amount, reason } }, {
-      onSuccess: () => void qc.invalidateQueries({ queryKey: ['/api/payouts'] }),
+      onSuccess: () => void qc.invalidateQueries({ queryKey: getListPayoutsQueryKey({ start, end }) }),
     });
   };
 
@@ -200,8 +201,8 @@ export function Payouts() {
         </div>
         <div className="team-actions">
           {!currentPeriod && <button className="button button-secondary" onClick={handleCreatePeriod} disabled={createPeriod.isPending}>Create pay period</button>}
-          {currentPeriod?.status === 'draft' && <button className="button button-primary" onClick={() => approvePeriod.mutate({ id: currentPeriod.id }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['/api/pay-periods'] }) })} disabled={approvePeriod.isPending}>Approve period</button>}
-          {currentPeriod?.status === 'approved' && <button className="button button-primary" onClick={() => markPaid.mutate({ id: currentPeriod.id }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['/api/pay-periods'] }) })} disabled={markPaid.isPending}>Mark paid</button>}
+          {currentPeriod?.status === 'draft' && <button className="button button-primary" onClick={() => approvePeriod.mutate({ id: currentPeriod.id }, { onSuccess: () => void qc.invalidateQueries({ queryKey: getListPayPeriodsQueryKey() }) })} disabled={approvePeriod.isPending}>Approve period</button>}
+          {currentPeriod?.status === 'approved' && <button className="button button-primary" onClick={() => markPaid.mutate({ id: currentPeriod.id }, { onSuccess: () => void qc.invalidateQueries({ queryKey: getListPayPeriodsQueryKey() }) })} disabled={markPaid.isPending}>Mark paid</button>}
         </div>
       </section>
       
