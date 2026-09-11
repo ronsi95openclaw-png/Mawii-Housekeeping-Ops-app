@@ -281,7 +281,7 @@ export function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { o
     <div className="modal-scrim" onClick={onClose}>
       <form className="modal panel" onClick={(e) => e.stopPropagation()} onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit({ ...form, address: fullAddress }); }}>
         <div className="modal-head">
-          <div><span className="eyebrow">Elevate OS intake</span><h3>Add a job</h3></div>
+          <div><span className="eyebrow">Work order</span><h3>Add a job</h3></div>
           <button type="button" className="icon-button" onClick={onClose} data-testid="button-close-create-job"><X size={17} /></button>
         </div>
         <div className="form-grid">

@@ -122,7 +122,7 @@ function Shell({ children }: { children: ReactNode }) {
           <button className="mobile-menu" onClick={() => setOpen(true)} data-testid="button-open-menu"><Menu size={21} /></button>
           <div>
             <span className="eyebrow">Today · {dateLabel}</span>
-            <h2>{activeLocation === '/' ? `Good morning, ${user?.firstName || 'Danna'}` : navItems.find((item) => item.href === activeLocation)?.label || 'Operations'}</h2>
+            <h2>{activeLocation === '/' ? (user?.firstName ? `Good morning, ${user.firstName}` : 'Good morning') : navItems.find((item) => item.href === activeLocation)?.label || 'Operations'}</h2>
           </div>
           <div className="topbar-actions">
             <div style={{ position: 'relative' }}>
