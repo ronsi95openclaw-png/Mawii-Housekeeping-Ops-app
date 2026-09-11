@@ -87,7 +87,8 @@ export function Jobs() {
   if (jobs.isLoading) return <LoadingState label="Loading jobs" />;
   if (jobs.isError) return <ErrorState onRetry={() => void jobs.refetch()} />;
   
-  const filtered = (jobs.data || []).filter((job) => (filter === 'all' || job.status === filter) && `${job.clientName} ${job.address} ${job.serviceType}`.toLowerCase().includes(query.toLowerCase()));
+  const matchesFilter = (job: Job) => filter === 'all' || (filter === 'unassigned' ? !job.team?.length : job.status === filter);
+  const filtered = (jobs.data || []).filter((job) => matchesFilter(job) && `${job.clientName} ${job.address} ${job.serviceType}`.toLowerCase().includes(query.toLowerCase()));
   const selectedJob = selectedId ? (jobs.data || []).find((j) => j.id === selectedId) : null;
   
   const submitCreate = (data: NewJobForm) => {
@@ -129,9 +130,9 @@ export function Jobs() {
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search client, address, or service" data-testid="input-search-jobs" />
         </div>
         <div className="filter-tabs">
-          {['all', 'scheduled', 'in_progress', 'attention', 'completed'].map((value) => (
+          {['all', 'unassigned', 'scheduled', 'in_progress', 'attention', 'completed'].map((value) => (
             <button key={value} className={filter === value ? 'filter-active' : ''} onClick={() => setFilter(value)} data-testid={`button-filter-${value}`}>
-              {value === 'all' ? 'All jobs' : statusLabel(value)}
+              {value === 'all' ? 'All jobs' : value === 'unassigned' ? 'Needs crew' : statusLabel(value)}
             </button>
           ))}
         </div>

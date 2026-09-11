@@ -902,6 +902,16 @@ router.post("/integrations/elevate/jobs", async (req, res): Promise<void> => {
       message,
       jobId: inserted.id,
     });
+    // An imported job arrives with nobody on it, so the desk has to learn it exists.
+    await notifyEmployees(
+      (await db.select({ id: employeesTable.id }).from(employeesTable).where(inArray(employeesTable.role, ["owner", "manager"]))).map(({ id }) => ({
+        employeeId: id,
+        jobId: inserted.id,
+        kind: "import",
+        title: "New job from Elevate OS",
+        body: `${inserted.clientName} · ${inserted.serviceType} · ${inserted.scheduledDate} ${inserted.startTime} — assign a cleaner.`,
+      })),
+    );
     res.status(201).json({
       success: true,
       duplicate: false,
