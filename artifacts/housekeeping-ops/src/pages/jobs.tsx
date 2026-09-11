@@ -488,18 +488,28 @@ function JobDetail({ job }: { job: Job }) {
               <Avatar member={member} />
               <div><strong>{member.name}</strong><span>{member.role}</span></div>
                <a href={`tel:${member.phone ?? ''}`} className="icon-button" data-testid={`link-call-team-${member.id}`} aria-label={`Call ${member.name}`}><Phone size={14} /></a>
+               <button className="icon-button" onClick={() => patch({ employeeIds: (current.assignedEmployees || []).filter((assigned) => assigned.id !== member.id).map((assigned) => assigned.id) })} data-testid={`button-unassign-${member.id}`} aria-label={`Remove ${member.name} from this job`}><X size={14} /></button>
             </div>
           )) : (
             <span className="muted-copy">No team assigned.</span>
           )}
         </div>
-         <div className="assigned-team" style={{ marginTop: '10px' }}>
-           {(employees.data || []).filter((employee) => !current.assignedEmployees?.some((assigned) => assigned.id === employee.id)).map((employee) => (
-             <button key={employee.id} className="button button-secondary" onClick={() => patch({ employeeIds: [...(current.assignedEmployees?.map((assigned) => assigned.id) || []), employee.id] })}>
-               Assign {employee.name}
-             </button>
-           ))}
-         </div>
+         <label style={{ marginTop: '12px' }}>Assign someone
+           <select
+             value=""
+             onChange={(e) => {
+               const employeeId = Number(e.target.value);
+               if (!employeeId) return;
+               patch({ employeeIds: [...(current.assignedEmployees?.map((assigned) => assigned.id) || []), employeeId] });
+             }}
+             data-testid="select-assign-employee"
+           >
+             <option value="">Choose an employee…</option>
+             {(employees.data || [])
+               .filter((employee) => !current.assignedEmployees?.some((assigned) => assigned.id === employee.id))
+               .map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.role}</option>)}
+           </select>
+         </label>
       </div>
       
       <div className="detail-section proof-section">
