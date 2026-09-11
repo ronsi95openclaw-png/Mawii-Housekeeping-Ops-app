@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import http, { type Server } from "node:http";
 import { randomUUID } from "node:crypto";
-import { and, eq, like } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 import app from "../app";
 import {
   db,
@@ -271,11 +271,9 @@ describe("Elevate import regression", () => {
         } else {
           await db.delete(jobImportEventsTable).where(like(jobImportEventsTable.externalId, `${token}%`));
         }
-        if (managerId || cleanerId) {
-          await db.delete(employeesTable).where(and(
-            managerId ? eq(employeesTable.id, managerId) : undefined,
-            cleanerId ? eq(employeesTable.id, cleanerId) : undefined,
-          ));
+        const fixtureEmployeeIds = [managerId, cleanerId].filter((id): id is number => id !== undefined);
+        if (fixtureEmployeeIds.length) {
+          await db.delete(employeesTable).where(inArray(employeesTable.id, fixtureEmployeeIds));
         }
         delete process.env.SESSION_SECRET;
       }

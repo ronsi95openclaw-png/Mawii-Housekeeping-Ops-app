@@ -30,7 +30,13 @@ import {
 import { canCleanerAccessJob } from "../lib/job-access";
 
 const router: IRouter = Router();
-router.use(requireAuth);
+router.use((req, res, next) => {
+  if (req.method === "POST" && req.path === "/integrations/elevate/jobs") {
+    next();
+    return;
+  }
+  requireAuth(req, res, next);
+});
 let seedPromise: Promise<void> | null = null;
 
 type ChecklistItem = { id: number; label: string; completed: boolean };
@@ -778,7 +784,7 @@ router.post("/integrations/elevate/jobs", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/integrations/elevate/status", async (_req, res): Promise<void> => {
+router.get("/integrations/elevate/status", requireRole("owner", "manager"), async (_req, res): Promise<void> => {
   const events = await db
     .select()
     .from(jobImportEventsTable)
