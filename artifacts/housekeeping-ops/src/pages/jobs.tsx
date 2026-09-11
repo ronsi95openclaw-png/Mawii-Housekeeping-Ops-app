@@ -45,6 +45,17 @@ export function Jobs() {
   
   const params = new URLSearchParams(location.split('?')[1] || '');
   const selectedId = Number(params.get('job')) || null;
+  const requestedNew = params.get('new') === '1';
+  const requestedDate = params.get('date') || undefined;
+
+  useEffect(() => {
+    if (requestedNew) setShowCreate(true);
+  }, [requestedNew]);
+
+  const closeCreate = () => {
+    setShowCreate(false);
+    if (requestedNew) setLocation('/jobs');
+  };
 
   useEffect(() => {
     const newestEvent = elevate.data?.recentEvents?.[0]?.id;
@@ -63,7 +74,7 @@ export function Jobs() {
   const selectedJob = selectedId ? (jobs.data || []).find((j) => j.id === selectedId) : null;
   
   const submitCreate = (data: NewJobForm) => {
-    create.mutate({ data }, { onSuccess: () => { setShowCreate(false); void queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() }); } });
+    create.mutate({ data }, { onSuccess: () => { closeCreate(); void queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() }); } });
   };
   
   return (
@@ -146,15 +157,15 @@ export function Jobs() {
         <EmptyState title="No jobs match that view" body="Try clearing the search or changing the status filter." action={<button className="button button-secondary" onClick={() => { setSearch(''); setFilter('all'); }} data-testid="button-clear-job-filters">Clear filters</button>} />
       )}
       
-      {showCreate && <CreateJobDialog pending={create.isPending} onClose={() => setShowCreate(false)} onSubmit={submitCreate} />}
+      {showCreate && <CreateJobDialog pending={create.isPending} initialDate={requestedDate} onClose={closeCreate} onSubmit={submitCreate} />}
     </div>
   );
 }
 
-function CreateJobDialog({ onClose, onSubmit, pending }: { onClose: () => void; onSubmit: (data: NewJobForm) => void; pending: boolean }) {
+function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { onClose: () => void; onSubmit: (data: NewJobForm) => void; pending: boolean; initialDate?: string }) {
   const employees = useListEmployees();
   const customers = useListCustomers();
-  const [form, setForm] = useState({ clientName: '', address: '', scheduledDate: todayISO(), startTime: '09:00', endTime: '12:00', serviceType: 'Standard cleaning', serviceVariant: '2 bed / 2 bath Standard', addOns: [] as string[], durationMinutes: 180, frequency: 'Every 4 weeks', notes: '', clientPhone: '', teamMemberIds: [] as number[], employeeIds: [] as number[], customerId: '', addressId: '' });
+  const [form, setForm] = useState({ clientName: '', address: '', scheduledDate: initialDate || todayISO(), startTime: '09:00', endTime: '12:00', serviceType: 'Standard cleaning', serviceVariant: '2 bed / 2 bath Standard', addOns: [] as string[], durationMinutes: 180, frequency: 'Every 4 weeks', notes: '', clientPhone: '', teamMemberIds: [] as number[], employeeIds: [] as number[], customerId: '', addressId: '' });
   
   const selectedCustomerId = Number(form.customerId);
   const addresses = useListCustomerAddresses(selectedCustomerId, { query: { enabled: !!selectedCustomerId, queryKey: ['addresses', selectedCustomerId] } });

@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useListJobs } from '@workspace/api-client-react';
 import type { Job } from '@workspace/api-client-react';
-import { ChevronLeft, ChevronRight, X, Clock3, MapPin, UserRound, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Clock3, MapPin, UserRound, ArrowRight, Plus } from 'lucide-react';
 import { Link } from 'wouter';
-import { LoadingState, ErrorState, PageIntro, Badge, Avatar, formatDate, formatTime, statusTone, statusLabel, startOfWeek } from '@/lib/shared';
+import { LoadingState, ErrorState, PageIntro, Badge, Avatar, formatDate, formatTime, statusTone, statusLabel, startOfWeek, todayISO } from '@/lib/shared';
 
 export function Schedule() {
   const jobs = useListJobs();
@@ -32,8 +32,9 @@ export function Schedule() {
             <button className="icon-button" onClick={() => setWeekOffset((v) => v - 1)} data-testid="button-previous-week"><ChevronLeft size={17} /></button>
             <button className="button button-secondary" onClick={() => setWeekOffset(0)} data-testid="button-current-week">This week</button>
             <button className="icon-button" onClick={() => setWeekOffset((v) => v + 1)} data-testid="button-next-week"><ChevronRight size={17} /></button>
+            <Link href={`/jobs?new=1&date=${todayISO()}`} className="button button-primary" data-testid="link-schedule-new-job"><Plus size={16} />New job</Link>
           </div>
-        } 
+        }
       />
       
       <div className="schedule-meta">
@@ -57,10 +58,12 @@ export function Schedule() {
         </div>
         <div className="schedule-row">
           <div className="time-axis"><span>8 AM</span><span>10 AM</span><span>12 PM</span><span>2 PM</span><span>4 PM</span></div>
-          {week.map((day) => { 
-            const dayJobs = jobList.filter((job) => job.scheduledDate === day.toISOString().slice(0, 10)); 
+          {week.map((day) => {
+            const dayISO = day.toISOString().slice(0, 10);
+            const dayJobs = jobList.filter((job) => job.scheduledDate === dayISO);
             return (
               <div className="day-column" key={day.toISOString()}>
+                <Link href={`/jobs?new=1&date=${dayISO}`} className="day-add" aria-label={`Add a job on ${formatDate(dayISO, { weekday: 'long', month: 'short', day: 'numeric' })}`} data-testid={`link-add-job-${dayISO}`}><Plus size={15} /></Link>
                 {dayJobs.length ? dayJobs.map((job) => (
                   <button className={`schedule-job schedule-${job.status}`} key={job.id} onClick={() => setSelected(job)} data-testid={`schedule-job-${job.id}`}>
                     <span>{formatTime(job.startTime)}</span>
