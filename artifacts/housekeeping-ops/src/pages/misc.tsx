@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { 
   useListActivityHistory, useListJobs, useListIncidents, useReviewIncident, 
   useListEmployees, useCreateWorkerRate, useListPayouts, useListTimeEntries, useApproveTimeCorrection, useRejectTimeCorrection,
+  getListIncidentsQueryKey,
   useListPayPeriods, useCreatePayPeriod, useApprovePayPeriod, useMarkPayPeriodPaid, useAddPayoutAdjustment, useGetOwnerReport,
   getListPayPeriodsQueryKey, getListPayoutsQueryKey
 } from '@workspace/api-client-react';
@@ -47,13 +48,13 @@ export function Quality() {
                     <p style={{ whiteSpace: 'normal', marginTop: '6px' }}>{incident.description}</p>
                     {incident.status === 'open' && (
                       <div className="team-actions" style={{ marginTop: '12px' }}>
-                         <button className="button button-secondary" style={{ height: '28px' }} onClick={() => reviewIncident.mutate({ id: incident.id, data: { status: 'in_review' } }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['incidents'] }) })}>Mark In Review</button>
+                         <button className="button button-secondary" style={{ height: '28px' }} onClick={() => reviewIncident.mutate({ id: incident.id, data: { status: 'in_review' } }, { onSuccess: () => void qc.invalidateQueries({ queryKey: getListIncidentsQueryKey() }) })}>Mark In Review</button>
                       </div>
                     )}
-                     {incident.status === 'in_review' && (
+                     {(incident.status === 'in_review' || incident.status === 'reclean') && (
                       <div className="team-actions" style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-                        <button className="button button-primary" style={{ height: '28px' }} onClick={() => reviewIncident.mutate({ id: incident.id, data: { status: 'resolved', resolution: 'Resolved with client' } }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['incidents'] }) })}><Check size={14}/> Resolve</button>
-                        <button className="button button-secondary" style={{ height: '28px' }} onClick={() => reviewIncident.mutate({ id: incident.id, data: { status: 'reclean' } }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['incidents'] }) })}>Request Reclean</button>
+                        <button className="button button-primary" style={{ height: '28px' }} onClick={() => reviewIncident.mutate({ id: incident.id, data: { status: 'resolved', resolution: 'Resolved with client' } }, { onSuccess: () => void qc.invalidateQueries({ queryKey: getListIncidentsQueryKey() }) })}><Check size={14}/> Resolve</button>
+                        {incident.status === 'in_review' && <button className="button button-secondary" style={{ height: '28px' }} onClick={() => reviewIncident.mutate({ id: incident.id, data: { status: 'reclean' } }, { onSuccess: () => void qc.invalidateQueries({ queryKey: getListIncidentsQueryKey() }) })}>Request Reclean</button>}
                       </div>
                     )}
                   </div>
