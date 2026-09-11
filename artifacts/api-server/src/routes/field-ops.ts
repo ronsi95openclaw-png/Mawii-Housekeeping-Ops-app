@@ -45,6 +45,18 @@ function chicagoBoundary(date: string, endOfDay: boolean) {
   if (endOfDay) boundary.setUTCMilliseconds(999);
   return boundary;
 }
+const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+function isValidDateOnly(value: unknown): value is string {
+  if (typeof value !== "string" || !dateOnlyPattern.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year!, month! - 1, day!));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month! - 1 && parsed.getUTCDate() === day;
+}
+function parseDateQuery(value: unknown): Date | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 const event = async (type: string, title: string, detail?: string, jobId?: number) => {
   await db.insert(activityEventsTable).values({ type, title, detail, jobId });
 };
@@ -284,8 +296,9 @@ router.get("/incidents", requireRole("owner", "manager"), async (req, res) => { 
 
 router.post("/worker-rates", requireRole("owner"), async (req, res) => { const [rate] = await db.insert(workerRatesTable).values(body(req)).returning(); res.status(201).json(rate); });
 router.get("/payouts", requireRole("owner", "manager"), async (req, res) => {
-  const start = new Date(String(req.query.start));
-  const end = new Date(String(req.query.end));
+  const start = parseDateQuery(req.query.start);
+  const end = parseDateQuery(req.query.end);
+  if (!start || !end) { res.status(400).json({ error: "start and end must be valid dates" }); return; }
   // Ordinary shifts are payable as clocked; only an unresolved correction holds an entry back.
   const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, start), lte(timeEntriesTable.clockIn, end), ne(timeEntriesTable.correctionStatus, "pending")));
   const employees = await db.select().from(employeesTable);
@@ -386,9 +399,9 @@ router.post("/pay-periods/:id/approve", requireRole("owner", "manager"), async (
 router.post("/pay-periods/:id/paid", requireRole("owner", "manager"), async (req, res) => { const manager = await currentEmployee(req); const [existing] = await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, id(req.params.id))); if (!existing) { res.status(404).json({ error: "Pay period not found" }); return; } if (!canTransitionPayPeriod(existing.status as "draft" | "approved" | "paid", "paid")) { res.status(409).json({ error: "Pay period must be approved first" }); return; } const [period] = await db.update(payPeriodsTable).set({ status: "paid", paidBy: manager?.id, paidAt: new Date() }).where(and(eq(payPeriodsTable.id, existing.id), eq(payPeriodsTable.status, "approved"))).returning(); res.json(period); });
 router.post("/pay-periods/:id/adjustments", requireRole("owner", "manager"), async (req, res) => { const input = body(req); const reason = typeof input.reason === "string" ? input.reason.trim() : ""; if (!reason) { res.status(400).json({ error: "reason is required" }); return; } const adjustmentCents = parsePayoutAmountCents(input.amount); if (adjustmentCents === null) { res.status(400).json({ error: "amount must be a valid currency amount" }); return; } const [period] = await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, id(req.params.id))); if (!period || period.status !== "approved") { res.status(409).json({ error: "Payout adjustments require an approved unpaid period" }); return; } const manager = await currentEmployee(req); const [existing] = await db.select().from(payoutRecordsTable).where(and(eq(payoutRecordsTable.payPeriodId, id(req.params.id)), eq(payoutRecordsTable.employeeId, Number(input.employeeId)))); if (!existing) { res.status(404).json({ error: "Payout record not found" }); return; } if (existing.adjustmentReason || parsePayoutAmountCents(existing.adjustmentAmount) !== 0) { res.status(409).json({ error: "Payout adjustment already exists" }); return; } const baseCents = parsePayoutAmountCents(existing.amount); if (baseCents === null) { res.status(409).json({ error: "Payout base amount is invalid" }); return; } const [record] = await db.update(payoutRecordsTable).set({ adjustmentAmount: formatPayoutAmountCents(adjustmentCents), adjustmentReason: reason, adjustmentActor: manager?.id, amount: formatPayoutAmountCents(baseCents + adjustmentCents) }).where(eq(payoutRecordsTable.id, existing.id)).returning(); res.json(record); });
 router.get("/reports/owner", requireRole("owner", "manager"), async (req, res) => {
-  const start = String(req.query.start);
-  const end = String(req.query.end);
-  if (!start || !end) { res.status(400).json({ error: "start and end are required" }); return; }
+  const start = typeof req.query.start === "string" ? req.query.start : "";
+  const end = typeof req.query.end === "string" ? req.query.end : "";
+  if (!isValidDateOnly(start) || !isValidDateOnly(end)) { res.status(400).json({ error: "start and end must be valid dates in YYYY-MM-DD format" }); return; }
   const reportStart = chicagoBoundary(start, false);
   const reportEnd = chicagoBoundary(end, true);
   const jobs = await db.select().from(jobsTable).where(and(gte(jobsTable.scheduledDate, start), lte(jobsTable.scheduledDate, end)));

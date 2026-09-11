@@ -80,6 +80,9 @@ describe("owner report route boundaries", () => {
 
       try {
         expectStatus(await request(baseUrl, `/reports/owner?start=${reportStart}&end=${reportEnd}`), 401);
+        expect(expectStatus(await request(baseUrl, "/reports/owner?start=not-a-date&end=2030-09-07", {
+          headers: ownerHeaders,
+        }), 400)).toEqual({ error: "start and end must be valid dates in YYYY-MM-DD format" });
 
         const manager = expectStatus(await request(baseUrl, "/employees", {
           method: "POST",

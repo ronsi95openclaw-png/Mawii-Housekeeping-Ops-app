@@ -72,6 +72,9 @@ describe("payout route authorization and pay-period lifecycle", () => {
       try {
         expectStatus(await request(baseUrl, "/pay-periods"), 401);
         expectStatus(await request(baseUrl, "/payouts?start=2020-02-01T00:00:00.000Z&end=2020-02-02T00:00:00.000Z"), 401);
+        expect(expectStatus(await request(baseUrl, "/payouts?start=not-a-date&end=2020-02-02T00:00:00.000Z", {
+          headers: ownerHeaders,
+        }), 400)).toEqual({ error: "start and end must be valid dates" });
 
         const manager = expectStatus(await request(baseUrl, "/employees", {
           method: "POST",
