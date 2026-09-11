@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useGetDashboardSummary, useGetActivity, useListJobs, useTriggerDailySummary, getGetDashboardSummaryQueryKey, getGetActivityQueryKey } from '@workspace/api-client-react';
 import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -11,6 +12,19 @@ export function Dashboard() {
   const jobs = useListJobs();
   const qc = useQueryClient();
   const triggerSummary = useTriggerDailySummary();
+  const [summarySent, setSummarySent] = useState(false);
+
+  // Sending notifies the whole desk, so pressing it twice because nothing happened is
+  // worse than a moment's confirmation.
+  const sendDailySummary = () => {
+    triggerSummary.mutate(undefined, {
+      onSuccess: () => {
+        setSummarySent(true);
+        setTimeout(() => setSummarySent(false), 4000);
+        void qc.invalidateQueries({ queryKey: getGetActivityQueryKey() });
+      },
+    });
+  };
   
   if (summary.isLoading || activity.isLoading || jobs.isLoading) return <LoadingState label="Setting up your day" />;
   if (summary.isError || activity.isError || jobs.isError) return <ErrorState onRetry={() => { void qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }); void qc.invalidateQueries({ queryKey: getGetActivityQueryKey() }); }} />;
@@ -21,7 +35,7 @@ export function Dashboard() {
   
   return (
     <div className="content-stack">
-      <PageIntro eyebrow={`${weekday} · live board`} title="The day, at a glance." body="Keep the crew moving and every handoff documented." action={<div style={{ display: 'flex', gap: '8px' }}><button className="button button-secondary" disabled={triggerSummary.isPending} onClick={() => triggerSummary.mutate(undefined)}><BellRing size={15} />{triggerSummary.isPending ? 'Sending…' : 'Send daily summary'}</button><Link href="/schedule" className="button button-secondary" data-testid="link-view-schedule">Open schedule <ArrowRight size={15} /></Link></div>} />
+      <PageIntro eyebrow={`${weekday} · live board`} title="The day, at a glance." body="Keep the crew moving and every handoff documented." action={<div style={{ display: 'flex', gap: '8px' }}><button className="button button-secondary" disabled={triggerSummary.isPending} onClick={sendDailySummary} data-testid="button-send-daily-summary"><BellRing size={15} />{triggerSummary.isPending ? 'Sending…' : summarySent ? 'Summary sent' : triggerSummary.isError ? 'Send failed — retry' : 'Send daily summary'}</button><Link href="/schedule" className="button button-secondary" data-testid="link-view-schedule">Open schedule <ArrowRight size={15} /></Link></div>} />
       
       <section className="metric-grid animate-rise delay-1">
         {[
