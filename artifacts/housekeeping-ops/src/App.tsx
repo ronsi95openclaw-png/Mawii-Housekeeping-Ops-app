@@ -166,8 +166,8 @@ function Router() {
   return (
     <ErrorBoundary>
       <Switch>
-        <Route path="/sign-in" component={SignInPage} />
-        <Route path="/sign-up" component={SignUpPage} />
+        <Route path="/sign-in/*?" component={SignInPage} />
+        <Route path="/sign-up/*?" component={SignUpPage} />
         <Route>
           <SignedOut>
             <Redirect to="/sign-in" />
