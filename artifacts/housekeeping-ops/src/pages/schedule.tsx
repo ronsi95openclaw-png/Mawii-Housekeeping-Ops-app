@@ -7,9 +7,9 @@ import { ChevronLeft, ChevronRight, X, Clock3, MapPin, UserRound, ArrowRight, Pl
 import { Link } from 'wouter';
 import { LoadingState, ErrorState, PageIntro, Badge, Avatar, formatDate, formatTime, statusTone, statusLabel, startOfWeek, todayISO } from '@/lib/shared';
 
-type ScheduleView = 'day' | 'week';
+type ScheduleView = 'day' | 'week' | 'month';
 
-const VIEW_LABELS: Record<ScheduleView, string> = { day: 'Today', week: 'This week' };
+const VIEW_LABELS: Record<ScheduleView, string> = { day: 'Today', week: 'This week', month: 'This month' };
 
 function isoOf(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -89,9 +89,10 @@ export function Schedule() {
         </span>
       </div>
       
+      {view === 'month' ? <MonthBoard days={week} jobList={jobList} anchorMonth={anchorDay.getMonth()} onPick={setSelected} onAdd={setCreateDate} /> : (
       <section className="panel schedule-board" data-testid="schedule-board">
-        <div className="schedule-head">
-          <span className="eyebrow">Week view</span>
+        <div className="schedule-head" style={view === 'day' ? { gridTemplateColumns: '58px 1fr' } : undefined}>
+          <span className="eyebrow">{view === 'day' ? 'Day view' : 'Week view'}</span>
           {week.map((day) => (
             <div key={day.toISOString()} className={`day-head ${day.toDateString() === new Date().toDateString() ? 'day-today' : ''}`}>
               <span>{day.toLocaleDateString('en-US', { weekday: 'short' })}</span>
@@ -99,7 +100,7 @@ export function Schedule() {
             </div>
           ))}
         </div>
-        <div className="schedule-row">
+        <div className="schedule-row" style={view === 'day' ? { gridTemplateColumns: '58px 1fr' } : undefined}>
           <div className="time-axis"><span>8 AM</span><span>10 AM</span><span>12 PM</span><span>2 PM</span><span>4 PM</span></div>
           {week.map((day) => {
             const dayISO = day.toISOString().slice(0, 10);
@@ -120,10 +121,42 @@ export function Schedule() {
           })}
         </div>
       </section>
-      
+      )}
+
       {selected && <JobQuickView job={selected} onClose={() => setSelected(null)} />}
       {createDate ? <CreateJobDialog pending={create.isPending} initialDate={createDate} onClose={() => setCreateDate(null)} onSubmit={submitCreate} /> : null}
     </div>
+  );
+}
+
+function MonthBoard({ days, jobList, anchorMonth, onPick, onAdd }: { days: Date[]; jobList: Job[]; anchorMonth: number; onPick: (job: Job) => void; onAdd: (dayISO: string) => void }) {
+  return (
+    <section className="panel month-board" data-testid="schedule-board">
+      <div className="month-head">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => <span key={label}>{label}</span>)}
+      </div>
+      <div className="month-grid">
+        {days.map((day) => {
+          const dayISO = isoOf(day);
+          const dayJobs = jobList.filter((job) => job.scheduledDate === dayISO);
+          return (
+            <div className={`month-cell ${day.getMonth() === anchorMonth ? '' : 'month-cell-muted'} ${dayISO === todayISO() ? 'month-cell-today' : ''}`} key={dayISO}>
+              <div className="month-cell-head">
+                <strong>{day.getDate()}</strong>
+                <button type="button" onClick={() => onAdd(dayISO)} className="month-add" aria-label={`Add a job on ${dayISO}`} data-testid={`button-add-job-${dayISO}`}><Plus size={13} /></button>
+              </div>
+              {dayJobs.slice(0, 3).map((job) => (
+                <button className={`month-chip schedule-${job.status}`} key={job.id} onClick={() => onPick(job)} data-testid={`month-job-${job.id}`}>
+                  <span>{formatTime(job.startTime)}</span>
+                  <strong>{job.clientName}</strong>
+                </button>
+              ))}
+              {dayJobs.length > 3 ? <span className="month-more">+{dayJobs.length - 3} more</span> : null}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

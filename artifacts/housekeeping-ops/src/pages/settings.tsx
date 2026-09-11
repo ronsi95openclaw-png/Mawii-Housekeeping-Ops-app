@@ -6,7 +6,7 @@ export function Settings() {
   const [saved, setSaved] = useState(false);
   const [prefs, setPrefs] = useState({ morning: true, attention: true, proof: true, weekly: false });
   const [company, setCompany] = useState(() => {
-    const defaults = { name: 'Mawii Property Care', phone: '+1 (214) 650-4326', serviceArea: 'DFW area' };
+    const defaults = { name: 'Mawii Property Care', phone: '+1 (214) 650-4326', serviceArea: 'DFW area', website: '' };
     try {
       const stored = window.localStorage.getItem('mawii-company-settings');
       return stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
@@ -50,12 +50,17 @@ export function Settings() {
           <div className="section-heading"><div><span className="eyebrow">Company profile</span><h3>How your team shows up</h3></div><Home size={18} className="muted-icon" /></div>
           <div className="company-lockup">
             <img src="/mawii-logo.jpeg" alt="Mawii Property Care logo" />
-            <div><strong>{company.name}</strong><span>Clean spaces. Better places.</span></div>
+            <div>
+              <strong>{company.name}</strong>
+              <span>Clean spaces. Better places.</span>
+              {company.website ? <a href={/^https?:\/\//.test(company.website) ? company.website : `https://${company.website}`} target="_blank" rel="noreferrer noopener" className="text-link" data-testid="link-company-website">{company.website.replace(/^https?:\/\//, '')}</a> : null}
+            </div>
           </div>
           <div className="form-stack">
             <label>Company name<input value={company.name} onChange={(e) => setCompany({ ...company, name: e.target.value })} data-testid="input-company-name" /></label>
             <label>Primary dispatch phone<input value={company.phone} onChange={(e) => setCompany({ ...company, phone: e.target.value })} data-testid="input-company-phone" /></label>
             <label>Service area<input value={company.serviceArea} onChange={(e) => setCompany({ ...company, serviceArea: e.target.value })} data-testid="input-company-area" /></label>
+            <label>Website<input value={company.website} onChange={(e) => setCompany({ ...company, website: e.target.value })} placeholder="mawiipropertycare.com" data-testid="input-company-website" /></label>
           </div>
           <button className="button button-primary save-button" onClick={saveCompany} data-testid="button-save-settings">{saved ? <><Check size={15} />Saved</> : 'Save company settings'}</button>
         </section>

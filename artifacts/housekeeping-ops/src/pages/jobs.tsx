@@ -169,7 +169,14 @@ export function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { o
   
   const selectedCustomerId = Number(form.customerId);
   const addresses = useListCustomerAddresses(selectedCustomerId, { query: { enabled: !!selectedCustomerId, queryKey: ['addresses', selectedCustomerId] } });
-  
+  const knownAddresses = useListJobs();
+  const [unit, setUnit] = useState({ type: 'house', building: '', number: '' });
+
+  const addressSuggestions = Array.from(new Set((knownAddresses.data || []).map((job) => job.address).filter(Boolean)));
+  const fullAddress = unit.type === 'apartment'
+    ? [form.address, unit.building && `Bldg ${unit.building}`, unit.number && `Apt ${unit.number}`].filter(Boolean).join(', ')
+    : form.address;
+
   const update = (key: keyof typeof form, value: any) => setForm((current) => ({ ...current, [key]: value }));
   const toggleAddOn = (addOn: string) => setForm((current) => ({ ...current, addOns: current.addOns.includes(addOn) ? current.addOns.filter((item) => item !== addOn) : [...current.addOns, addOn] }));
   
@@ -203,7 +210,7 @@ export function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { o
 
   return (
     <div className="modal-scrim" onClick={onClose}>
-      <form className="modal panel" onClick={(e) => e.stopPropagation()} onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(form); }}>
+      <form className="modal panel" onClick={(e) => e.stopPropagation()} onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit({ ...form, address: fullAddress }); }}>
         <div className="modal-head">
           <div><span className="eyebrow">Elevate OS intake</span><h3>Add a job</h3></div>
           <button type="button" className="icon-button" onClick={onClose} data-testid="button-close-create-job"><X size={17} /></button>
@@ -229,7 +236,22 @@ export function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { o
           <label>Client name<input required value={form.clientName} onChange={(e) => update('clientName', e.target.value)} data-testid="input-job-client" /></label>
           <label>Client phone<input value={form.clientPhone} onChange={(e) => update('clientPhone', e.target.value)} data-testid="input-job-phone" /></label>
           
-          <label className="span-2">Service address<input required value={form.address} onChange={(e) => update('address', e.target.value)} data-testid="input-job-address" /></label>
+          <label className="span-2">Service address
+            <input required list="known-addresses" value={form.address} onChange={(e) => update('address', e.target.value)} placeholder="Street address" data-testid="input-job-address" />
+            <datalist id="known-addresses">{addressSuggestions.map((option) => <option key={option} value={option} />)}</datalist>
+          </label>
+          <label>Property type
+            <select value={unit.type} onChange={(e) => setUnit({ ...unit, type: e.target.value })} data-testid="select-property-type">
+              <option value="house">House</option>
+              <option value="apartment">Apartment / unit</option>
+            </select>
+          </label>
+          {unit.type === 'apartment' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <label>Building<input value={unit.building} onChange={(e) => setUnit({ ...unit, building: e.target.value })} placeholder="3" data-testid="input-job-building" /></label>
+              <label>Unit<input value={unit.number} onChange={(e) => setUnit({ ...unit, number: e.target.value })} placeholder="210" data-testid="input-job-unit" /></label>
+            </div>
+          ) : <div />}
           
           <label>Date<input type="date" required value={form.scheduledDate} onChange={(e) => update('scheduledDate', e.target.value)} data-testid="input-job-date" /></label>
           
