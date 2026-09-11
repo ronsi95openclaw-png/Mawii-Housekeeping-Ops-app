@@ -91,7 +91,7 @@ export function Team() {
         <div className="modal-scrim">
           <div className="modal panel small-modal">
             <div className="modal-head"><div><span className="eyebrow">One-time handoff</span><h3>Onboard {issuedToken.name}</h3></div><button className="icon-button" onClick={() => setIssuedToken(null)}><X size={17} /></button></div>
-            <p className="muted-copy">Send this code to the cleaner through your approved private channel. It will expire in 7 days and is shown only now.</p>
+            <p className="muted-copy">Send this code to them privately. They sign up, paste it on the connect screen, and get the position you chose. It expires in 7 days, works once, and is shown only now.</p>
             <code style={{ display: 'block', padding: '12px', wordBreak: 'break-all', background: 'hsl(var(--secondary))', borderRadius: '8px', fontSize: '11px' }}>{issuedToken.token}</code>
             <div className="modal-actions"><button className="button button-primary" onClick={() => setIssuedToken(null)}>I’ve saved the code</button></div>
           </div>
@@ -127,11 +127,8 @@ function EmployeeDialog({ onClose, onSubmit, pending, initialData }: { onClose: 
         </div>
         <div className="form-stack">
           <label>Full name<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="input-team-name" /></label>
-           {form.role !== 'cleaner' && <>
-             <label>Clerk User ID (for auth linkage)<input required value={form.clerkUserId} onChange={(e) => setForm({ ...form, clerkUserId: e.target.value })} placeholder="user_2X..." /></label>
-             {!initialData && <p className="muted-copy">Have them sign up first. The connect screen they land on shows their user ID with a copy button — paste it here.</p>}
-           </>}
-           {form.role === 'cleaner' && !initialData && <p className="muted-copy">The cleaner will securely link their own Clerk account with a one-time code after you save this profile.</p>}
+           {!initialData && <p className="muted-copy">Save this profile and Mawii gives you a one-time code. Send it to them; they sign up, paste the code, and land in the app with the position you chose here.</p>}
+           {initialData && <label>Clerk User ID (for auth linkage)<input value={form.clerkUserId} onChange={(e) => setForm({ ...form, clerkUserId: e.target.value })} placeholder="user_2X..." /></label>}
           <label>System Role
             <select required value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as EmployeeInputRole })}>
               <option value="owner">Owner</option>

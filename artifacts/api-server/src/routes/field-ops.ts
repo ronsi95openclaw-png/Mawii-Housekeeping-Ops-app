@@ -184,12 +184,14 @@ router.post("/employees", requireRole("owner"), async (req, res) => {
   const input = body(req);
   if (!input.name) { res.status(400).json({ error: "name is required" }); return; }
   const role = input.role ?? "cleaner";
-  const isPendingCleaner = role === "cleaner" && (!input.clerkUserId || String(input.clerkUserId).startsWith("pending-"));
-  const clerkUserId = isPendingCleaner ? `pending-${crypto.randomUUID()}` : input.clerkUserId;
-  if (!clerkUserId) { res.status(400).json({ error: "clerkUserId is required for owners and managers" }); return; }
+  // Any role may be invited with an owner-issued one-time code. The code is hashed,
+  // single-use and expires in 7 days, so it carries the same trust as the owner typing
+  // the person's Clerk id by hand — which is the only alternative and invites typos.
+  const awaitingSignIn = !input.clerkUserId || String(input.clerkUserId).startsWith("pending-");
+  const clerkUserId = awaitingSignIn ? `pending-${crypto.randomUUID()}` : input.clerkUserId;
   const [employee] = await db.insert(employeesTable).values({ name: input.name, clerkUserId, role, phone: input.phone, active: input.active ?? "true" }).returning();
   let bindingToken: string | undefined;
-  if (isPendingCleaner) {
+  if (awaitingSignIn) {
     bindingToken = randomBytes(32).toString("hex");
     await db.insert(employeeBindingTokensTable).values({
       employeeId: employee.id,
@@ -208,7 +210,7 @@ router.post("/employees/claim", requireAuth, async (req, res): Promise<void> => 
   const [binding] = await db.select().from(employeeBindingTokensTable).where(eq(employeeBindingTokensTable.tokenHash, hashBindingToken(token)));
   if (!binding || binding.claimedAt || binding.expiresAt <= new Date()) { res.status(400).json({ error: "Binding token is invalid or expired" }); return; }
   const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, binding.employeeId));
-  if (!employee || employee.role !== "cleaner" || employee.active !== "true" || !employee.clerkUserId.startsWith("pending-")) {
+  if (!employee || employee.active !== "true" || !employee.clerkUserId.startsWith("pending-")) {
     res.status(409).json({ error: "Employee is not eligible for binding" }); return;
   }
   const [claimed] = await db.update(employeesTable).set({ clerkUserId }).where(and(eq(employeesTable.id, employee.id), eq(employeesTable.clerkUserId, employee.clerkUserId))).returning();
