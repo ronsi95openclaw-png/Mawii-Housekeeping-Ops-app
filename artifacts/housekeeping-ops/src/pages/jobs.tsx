@@ -41,8 +41,8 @@ export function Jobs() {
   
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [filter, setFilter] = useState('all');
-  
+  const [filter, setFilter] = useState(() => new URLSearchParams(window.location.search).get('filter') || 'all');
+
   const params = new URLSearchParams(location.split('?')[1] || '');
   const selectedId = Number(params.get('job')) || null;
   const requestedNew = params.get('new') === '1';

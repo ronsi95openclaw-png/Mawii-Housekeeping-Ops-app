@@ -25,15 +25,15 @@ export function Dashboard() {
       
       <section className="metric-grid animate-rise delay-1">
         {[
-          { label: 'Today’s jobs', value: data?.todayJobs ?? 0, sub: 'on the board', icon: CalendarDays, tone: 'teal' },
-          { label: 'Open jobs', value: data?.openJobs ?? 0, sub: 'need a next step', icon: Zap, tone: 'orange' },
-          { label: 'Completed this week', value: data?.completedThisWeek ?? 0, sub: 'proof trails closed', icon: CheckCircle2, tone: 'blue' },
-          { label: 'Attention needed', value: data?.attentionNeeded ?? attention.length, sub: 'worth a look now', icon: AlertTriangle, tone: 'red' },
-        ].map(({ label, value, sub, icon: Icon, tone }) => (
-          <div className="metric-card panel" key={label} data-testid={`metric-${label.toLowerCase().replaceAll(' ', '-')}`}>
+          { label: 'Today’s jobs', value: data?.todayJobs ?? 0, sub: 'on the board', icon: CalendarDays, tone: 'teal', to: '/schedule' },
+          { label: 'Open jobs', value: data?.openJobs ?? 0, sub: 'need a next step', icon: Zap, tone: 'orange', to: '/jobs?filter=scheduled' },
+          { label: 'Completed this week', value: data?.completedThisWeek ?? 0, sub: 'proof trails closed', icon: CheckCircle2, tone: 'blue', to: '/jobs?filter=completed' },
+          { label: 'Attention needed', value: data?.attentionNeeded ?? attention.length, sub: 'worth a look now', icon: AlertTriangle, tone: 'red', to: '/jobs?filter=attention' },
+        ].map(({ label, value, sub, icon: Icon, tone, to }) => (
+          <Link href={to} className="metric-card panel" key={label} data-testid={`metric-${label.toLowerCase().replaceAll(' ', '-')}`}>
             <div className={`metric-icon metric-${tone}`}><Icon size={18} /></div>
             <div><span>{label}</span><strong>{value}</strong><small>{sub}</small></div>
-          </div>
+          </Link>
         ))}
       </section>
       

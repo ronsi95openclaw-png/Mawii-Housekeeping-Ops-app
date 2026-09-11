@@ -155,7 +155,8 @@
 .page-intro h1 { font-size: clamp(27px, 3vw, 37px); letter-spacing: -.065em; line-height: 1; margin: 7px 0 0; }
 .page-intro p { margin: 9px 0 0; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.metric-card { min-height: 113px; padding: 18px; display: flex; align-items: flex-start; gap: 13px; }
+.metric-card { min-height: 113px; padding: 18px; display: flex; align-items: flex-start; gap: 13px; color: inherit; text-decoration: none; transition: border-color .15s ease, transform .15s ease; }
+.metric-card:hover { border-color: hsl(var(--primary)); transform: translateY(-1px); }
 .metric-icon { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; }
 .metric-teal { background: hsl(174 35% 89%); color: hsl(174 35% 29%); }
 .metric-orange { background: hsl(25 79% 90%); color: hsl(20 72% 46%); }
