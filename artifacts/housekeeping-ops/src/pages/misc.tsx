@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { 
   useListActivityHistory, useListJobs, useListIncidents, useReviewIncident, 
   useListEmployees, useCreateWorkerRate, useListPayouts, useListTimeEntries, useApproveTimeCorrection, useRejectTimeCorrection,
-  getListIncidentsQueryKey,
+  getListIncidentsQueryKey, getGetOwnerReportQueryKey,
   useListPayPeriods, useCreatePayPeriod, useApprovePayPeriod, useMarkPayPeriodPaid, useAddPayoutAdjustment, useGetOwnerReport,
   getListPayPeriodsQueryKey, getListPayoutsQueryKey
 } from '@workspace/api-client-react';
@@ -85,8 +85,16 @@ function TimeCorrectionQueue() {
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
+  // Approving or rejecting a correction changes what the worker is owed, so the money
+  // screens must not keep serving the figures from before the decision.
+  const refreshAfterDecision = () => {
+    void qc.invalidateQueries({ queryKey: ['timeEntries'] });
+    void qc.invalidateQueries({ queryKey: getListPayoutsQueryKey() });
+    void qc.invalidateQueries({ queryKey: getGetOwnerReportQueryKey() });
+  };
+
   const handleApprove = (id: number) => {
-    approve.mutate({ id }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ['timeEntries'] }) });
+    approve.mutate({ id }, { onSuccess: refreshAfterDecision });
   };
 
   const handleReject = (id: number) => {
@@ -95,7 +103,7 @@ function TimeCorrectionQueue() {
       onSuccess: () => {
         setRejectingId(null);
         setRejectReason('');
-        void qc.invalidateQueries({ queryKey: ['timeEntries'] });
+        refreshAfterDecision();
       } 
     });
   };
