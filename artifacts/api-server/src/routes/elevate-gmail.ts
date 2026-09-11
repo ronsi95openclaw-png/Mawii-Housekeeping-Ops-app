@@ -7,9 +7,11 @@ import { parseScheduleEmail, type ParsedAppointment } from "../lib/elevate-email
 
 const router: IRouter = Router();
 
-// ElevateOS sends the schedule from hello@elevatedliving.com; matching the sender is far
-// steadier than matching a subject line they may reword.
-const GMAIL_QUERY = 'from:hello@elevatedliving.com newer_than:30d';
+// That sender also mails marketing and notices, so the subject narrows it to schedules.
+// Recent mail only, and past dates are skipped, so a first run cannot backfill the board
+// with jobs that already happened.
+const SENDER = "hello@elevatedliving.com";
+const buildQuery = (days: number) => `from:${SENDER} subject:schedule newer_than:${days}d`;
 const SOURCE = "elevate_email";
 
 type GmailPart = { mimeType?: string; body?: { data?: string }; parts?: GmailPart[] };
@@ -53,16 +55,20 @@ function checklistPlaceholder() {
  */
 router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"), async (req, res) => {
   try {
-    const list = await gmail(`/gmail/v1/users/me/messages?q=${encodeURIComponent(GMAIL_QUERY)}&maxResults=25`);
+    const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 60);
+    const includePast = req.query.includePast === "true";
+    const today = new Date().toISOString().slice(0, 10);
+    const list = await gmail(`/gmail/v1/users/me/messages?q=${encodeURIComponent(buildQuery(days))}&maxResults=25`);
     const messages: Array<{ id: string }> = list?.messages ?? [];
     if (!messages.length) {
-      res.json({ scanned: 0, created: 0, alreadyImported: 0, problems: [] });
+      res.json({ scanned: 0, created: 0, alreadyImported: 0, skippedPast: 0, problems: [] });
       return;
     }
 
     const created: number[] = [];
     const problems: string[] = [];
     let alreadyImported = 0;
+    let skippedPast = 0;
 
     for (const summary of messages) {
       const message = await gmail(`/gmail/v1/users/me/messages/${summary.id}?format=full`);
@@ -76,6 +82,7 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
       problems.push(...parseProblems);
 
       for (const [index, appointment] of appointments.entries()) {
+        if (!includePast && appointment.scheduledDate < today) { skippedPast += 1; continue; }
         const externalId = `${summary.id}:${index}`;
         const [existing] = await db.select({ id: jobsTable.id }).from(jobsTable)
           .where(and(eq(jobsTable.externalSource, SOURCE), eq(jobsTable.externalId, externalId)));
@@ -127,7 +134,7 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
       }))));
     }
 
-    res.json({ scanned: messages.length, created: created.length, alreadyImported, problems });
+    res.json({ scanned: messages.length, created: created.length, alreadyImported, skippedPast, problems });
   } catch (error) {
     req.log?.error({ err: error }, "Elevate Gmail sync failed");
     res.status(502).json({ error: "Mawii could not read the Elevate schedule mailbox. Check the Gmail connection in Replit." });
