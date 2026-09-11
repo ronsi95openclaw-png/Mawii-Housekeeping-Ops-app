@@ -11,6 +11,7 @@ import {
 import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, ChevronRight, ClipboardCheck, MapPin, Check, MessageSquare, Phone, CheckCircle2, Send, X, ArrowRight, AlertTriangle, LoaderCircle, RefreshCw, Edit2 } from 'lucide-react';
+import { ADD_ON_OPTIONS, addOnTotals, money } from '@/lib/pricing';
 import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, todayISO } from '@/lib/shared';
 
 const SERVICE_OPTIONS = ['Standard cleaning', 'Deep cleaning', 'Move In/Out cleaning'];
@@ -214,9 +215,9 @@ function EditJobDialog({ job, onClose, onSubmit, pending }: { job: Job; onClose:
           </select></label>
           <label>Variant<input value={form.serviceVariant} onChange={(e) => setForm({ ...form, serviceVariant: e.target.value })} data-testid="input-edit-variant" /></label>
           <fieldset className="span-2 add-on-field">
-            <legend>Add-ons</legend>
+            <legend>Add-ons{addOnTotals(form.addOns).count ? ` · +${addOnTotals(form.addOns).minutes} min · ${money(addOnTotals(form.addOns).amount)}` : ""}</legend>
             <div>
-              {['Laundry', 'Inside Oven', 'Inside Fridge', 'Inside Cabinets'].map((addOn) => (
+              {ADD_ON_OPTIONS.map((addOn) => (
                 <label key={addOn}><input type="checkbox" checked={form.addOns.includes(addOn)} onChange={() => toggleAddOn(addOn)} />{addOn}</label>
               ))}
             </div>
@@ -346,9 +347,9 @@ export function CreateJobDialog({ onClose, onSubmit, pending, initialDate }: { o
           <label>Frequency<input value={form.frequency} onChange={(e) => update('frequency', e.target.value)} data-testid="input-job-frequency" /></label>
           
           <fieldset className="span-2 add-on-field">
-            <legend>Add-ons</legend>
+            <legend>Add-ons{addOnTotals(form.addOns).count ? ` · +${addOnTotals(form.addOns).minutes} min · ${money(addOnTotals(form.addOns).amount)}` : ""}</legend>
             <div>
-              {['Laundry', 'Inside Oven', 'Inside Fridge', 'Inside Cabinets'].map((addOn) => (
+              {ADD_ON_OPTIONS.map((addOn) => (
                 <label key={addOn}><input type="checkbox" checked={form.addOns.includes(addOn)} onChange={() => toggleAddOn(addOn)} />{addOn}</label>
               ))}
             </div>
@@ -435,7 +436,7 @@ function JobDetail({ job }: { job: Job }) {
           <div><span className="muted-copy">Variant:</span> <strong>{current.serviceVariant || 'Standard'}</strong></div>
           <div><span className="muted-copy">Frequency:</span> <strong>{current.frequency || 'One-time'}</strong></div>
           <div><span className="muted-copy">Duration:</span> <strong>{current.durationMinutes ? `${current.durationMinutes} mins` : 'Unspecified'}</strong></div>
-          <div><span className="muted-copy">Add-ons:</span> <strong>{current.addOns?.join(', ') || 'None'}</strong></div>
+          <div><span className="muted-copy">Add-ons:</span> <strong>{current.addOns?.length ? `${current.addOns.join(', ')} · +${addOnTotals(current.addOns).minutes} min · ${money(addOnTotals(current.addOns).amount)}` : 'None'}</strong></div>
         </div>
       </div>
 
