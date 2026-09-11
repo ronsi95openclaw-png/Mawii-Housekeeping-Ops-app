@@ -5,7 +5,8 @@ import {
   useSendJobMessage, useListEmployees, useListJobMessages, useListCustomers, useListCustomerAddresses,
   useGetElevateImportStatus, getGetElevateImportStatusQueryKey,
   getListJobsQueryKey, getGetJobQueryKey, getGetDashboardSummaryQueryKey, getListJobMessagesQueryKey,
-  useListJobReminders, useCreateJobReminder, getListJobRemindersQueryKey
+  useListJobReminders, useCreateJobReminder, getListJobRemindersQueryKey,
+  useListNotifications, getListNotificationsQueryKey
 } from '@workspace/api-client-react';
 import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,6 +40,11 @@ export function Jobs() {
   const queryClient = useQueryClient();
   const lastImportEvent = useRef<number | null>(null);
   
+  const notifications = useListNotifications({ limit: 30 }, { query: { queryKey: getListNotificationsQueryKey({ limit: 30 }), refetchInterval: 30_000 } });
+  const jobsWithUnreadMessages = new Set(
+    (notifications.data || []).filter((item) => item.kind === 'message' && !item.readAt && item.jobId).map((item) => item.jobId),
+  );
+
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState(() => new URLSearchParams(window.location.search).get('filter') || 'all');
@@ -138,6 +144,7 @@ export function Jobs() {
                 <div className="job-list-main">
                   <div className="job-title-line">
                     <strong>{job.clientName}</strong>
+                    {jobsWithUnreadMessages.has(job.id) ? <span className="unread-flag" data-testid={`unread-job-${job.id}`}>New message</span> : null}
                     <Badge tone={statusTone(job.status)}>{statusLabel(job.status)}</Badge>
                   </div>
                   <span><MapPin size={13} />{job.address}</span>

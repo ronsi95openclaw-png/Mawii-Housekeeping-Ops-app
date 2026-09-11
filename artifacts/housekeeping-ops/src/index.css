@@ -249,6 +249,7 @@
 .month-more { padding-left: 6px; color: hsl(var(--muted-foreground)); font-size: 9px; }
 @media (max-width: 800px) { .month-cell { min-height: 74px; padding: 4px; } .month-chip strong { font-size: 9px; } }
 .team-card-revoked { opacity: .62; border-style: dashed; }
+.unread-flag { padding: 2px 7px; border-radius: 999px; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); font-size: 8px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .view-switch { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid hsl(var(--border)); border-radius: 9px; background: hsl(var(--secondary)); }
 .view-switch button { border: 0; border-radius: 6px; padding: 6px 12px; background: transparent; color: hsl(var(--muted-foreground)); font: 700 10px var(--app-font-sans); cursor: pointer; }
 .view-switch .view-active { background: hsl(var(--card)); color: hsl(var(--foreground)); box-shadow: 0 1px 3px rgba(20,39,38,.12); }

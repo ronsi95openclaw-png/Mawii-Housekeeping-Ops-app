@@ -12,14 +12,15 @@ import {
   useGetActiveTimeEntries,
   useListProofPhotos,
   useCompleteAssignedJob,
-  useListJobMessages, useSendFieldJobMessage, getListJobMessagesQueryKey
+  useListJobMessages, useSendFieldJobMessage, getListJobMessagesQueryKey,
+  useListNotifications, getListNotificationsQueryKey
 } from '@workspace/api-client-react';
 import type { Job, JobAssignment } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { MapPin, Clock3, Check, Camera, Coffee, AlertTriangle, ChevronRight, X, Image as ImageIcon, Map as MapIcon } from 'lucide-react';
 import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, formatDate, formatTime, statusTone, statusLabel } from '@/lib/shared';
 
-function FieldJobRow({ assignment, onSelect }: { assignment: JobAssignment; onSelect: (jobId: number, assignmentId: number) => void }) {
+function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignment; onSelect: (jobId: number, assignmentId: number) => void; unread: boolean }) {
   const { data: job, isLoading } = useGetJob(assignment.jobId, { query: { queryKey: getGetJobQueryKey(assignment.jobId) } });
 
   return (
@@ -27,6 +28,7 @@ function FieldJobRow({ assignment, onSelect }: { assignment: JobAssignment; onSe
       <div className="job-list-main">
         <div className="job-title-line">
           <strong>{isLoading ? 'Loading...' : (job?.clientName || 'Job')}</strong>
+          {unread ? <span className="unread-flag" data-testid={`unread-job-${assignment.jobId}`}>New message</span> : null}
           <Badge tone={statusTone(job?.status || assignment.status)}>{statusLabel(job?.status || assignment.status)}</Badge>
         </div>
         <span><MapPin size={13} /> {job?.address || '—'}</span>
@@ -39,7 +41,12 @@ function FieldJobRow({ assignment, onSelect }: { assignment: JobAssignment; onSe
 
 export function Field() {
   const jobs = useListAssignedJobs();
+  const notifications = useListNotifications({ limit: 30 }, { query: { queryKey: getListNotificationsQueryKey({ limit: 30 }), refetchInterval: 30_000 } });
   const [selected, setSelected] = useState<{ jobId: number; assignmentId: number } | null>(null);
+
+  const jobsWithUnreadMessages = new Set(
+    (notifications.data || []).filter((item) => item.kind === 'message' && !item.readAt && item.jobId).map((item) => item.jobId),
+  );
 
   if (jobs.isLoading) return <LoadingState label="Loading assignments" />;
   if (jobs.isError) return <ErrorState onRetry={() => void jobs.refetch()} />;
@@ -57,7 +64,7 @@ export function Field() {
       {assignments.length ? (
         <div className="job-list">
           {assignments.map((assignment) => (
-            <FieldJobRow key={assignment.id} assignment={assignment} onSelect={(jobId, assignmentId) => setSelected({ jobId, assignmentId })} />
+            <FieldJobRow key={assignment.id} assignment={assignment} unread={jobsWithUnreadMessages.has(assignment.jobId)} onSelect={(jobId, assignmentId) => setSelected({ jobId, assignmentId })} />
           ))}
         </div>
       ) : (
