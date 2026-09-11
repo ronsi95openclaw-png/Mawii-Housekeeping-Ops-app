@@ -72,7 +72,7 @@ export function Jobs() {
         `${result.created} new job${result.created === 1 ? '' : 's'} imported from ${result.scanned} email${result.scanned === 1 ? '' : 's'}`
         + (result.alreadyImported ? `, ${result.alreadyImported} already here` : '')
         + (result.skippedPast ? `, ${result.skippedPast} skipped as past` : '')
-        + (problems.length ? `. ${problems.length} could not be read.` : '.'),
+        + (problems.length ? `. ${problems.length} could not be read: ${problems[0]}` : '.'),
       );
       void queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
       void elevate.refetch();

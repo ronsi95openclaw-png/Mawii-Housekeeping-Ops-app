@@ -25,16 +25,28 @@ function extractPlainText(payload: GmailPart | undefined): string {
     const found = extractPlainText(part);
     if (found) return found;
   }
-  // Fall back to the HTML body with tags stripped, since some senders skip the text part.
+  // Fall back to the HTML body, since Elevate's mail may carry no plain text part.
   if (payload.mimeType === "text/html" && payload.body?.data) {
-    return decode(payload.body.data)
-      .replace(/<\/(p|div|tr|h[1-6]|li)>/gi, "\n")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<[^>]+>/g, "")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/&amp;/gi, "&");
+    return htmlToText(decode(payload.body.data));
   }
   return "";
+}
+
+/** Elevate's mail is table-based HTML, so every block boundary has to become a newline. */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|td|th|h[1-6]|li|table|section)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[ \t ]+/g, " ").trim())
+    .filter((line, index, lines) => line !== "" || (lines[index - 1] ?? "") !== "")
+    .join("\n");
 }
 
 async function gmail(path: string): Promise<any> {
@@ -88,7 +100,8 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
       }
 
       const { appointments, problems: parseProblems } = parseScheduleEmail(body);
-      problems.push(...parseProblems);
+      // Include a little of what was actually read, otherwise a parse failure is a guessing game.
+      problems.push(...parseProblems.map((problem) => `${problem} (read: ${body.replace(/\s+/g, " ").slice(0, 160)}…)`));
 
       for (const [index, appointment] of appointments.entries()) {
         if (!includePast && appointment.scheduledDate < today) { skippedPast += 1; continue; }
