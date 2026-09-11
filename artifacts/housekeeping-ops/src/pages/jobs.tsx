@@ -158,7 +158,7 @@ export function Jobs() {
           <button className="button button-primary" onClick={() => void runMailboxSync()} disabled={syncing} data-testid="button-sync-elevate-mailbox">
             {syncing ? <><LoaderCircle size={14} className="spin" />Checking…</> : <><RefreshCw size={14} />Check Elevate email</>}
           </button>
-          <button className="button button-secondary" onClick={() => void elevate.refetch()} disabled={elevate.isFetching} data-testid="button-refresh-elevate-imports"><RefreshCw size={14} />Refresh</button>
+
         </div>
         {syncResult ? <p className={syncResult.startsWith('Could not') ? 'form-error' : 'muted-copy'} data-testid="text-sync-result">{syncResult}</p> : null}
       </section>

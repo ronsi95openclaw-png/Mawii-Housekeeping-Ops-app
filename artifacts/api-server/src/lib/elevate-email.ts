@@ -101,13 +101,15 @@ function labelled(block: string, label: string): string | null {
   return inline ? inline[1]!.trim() : null;
 }
 
-export function parseScheduleEmail(body: string): ParseResult {
+export function parseScheduleEmail(body: string, subject = ""): ParseResult {
   const text = body.replace(/ /g, " ");
   const problems: string[] = [];
 
-  const scheduledDate = parseScheduleDate(text);
+  // The subject carries the same date ("Your schedule for Saturday, September 12th, 2026"),
+  // so it rescues a body whose markup hid the greeting line.
+  const scheduledDate = parseScheduleDate(text) ?? parseScheduleDate(subject);
   if (!scheduledDate) {
-    return { appointments: [], problems: ["No schedule date found in the email"] };
+    return { appointments: [], problems: ["No schedule date found in the email or its subject"] };
   }
 
   // Each appointment starts with its own time window line.

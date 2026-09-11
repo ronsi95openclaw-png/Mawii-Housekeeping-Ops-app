@@ -14,7 +14,7 @@ const SENDER = "hello@elevatedliving.com";
 const buildQuery = (days: number) => `from:${SENDER} subject:schedule newer_than:${days}d`;
 const SOURCE = "elevate_email";
 
-type GmailPart = { mimeType?: string; body?: { data?: string }; parts?: GmailPart[] };
+type GmailPart = { mimeType?: string; body?: { data?: string }; parts?: GmailPart[]; headers?: Array<{ name?: string; value?: string }> };
 
 /** Gmail returns the body base64url encoded, nested wherever the sender felt like putting it. */
 function extractPlainText(payload: GmailPart | undefined): string {
@@ -99,7 +99,8 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
         continue;
       }
 
-      const { appointments, problems: parseProblems } = parseScheduleEmail(body);
+      const subject = (message?.payload?.headers ?? []).find((header: any) => header?.name?.toLowerCase() === "subject")?.value ?? "";
+      const { appointments, problems: parseProblems } = parseScheduleEmail(body, subject);
       // Include a little of what was actually read, otherwise a parse failure is a guessing game.
       problems.push(...parseProblems.map((problem) => `${problem} (read: ${body.replace(/\s+/g, " ").slice(0, 160)}…)`));
 
