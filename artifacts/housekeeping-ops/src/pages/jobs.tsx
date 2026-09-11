@@ -9,7 +9,7 @@ import {
 } from '@workspace/api-client-react';
 import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, ChevronRight, ClipboardCheck, MapPin, Check, MessageSquare, Phone, CheckCircle2, Send, X, ArrowRight, AlertTriangle, LoaderCircle, RefreshCw } from 'lucide-react';
+import { Plus, Search, ChevronRight, ClipboardCheck, MapPin, Check, MessageSquare, Phone, CheckCircle2, Send, X, ArrowRight, AlertTriangle, LoaderCircle, RefreshCw, Edit2 } from 'lucide-react';
 import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, whatsappUrl, todayISO } from '@/lib/shared';
 
 const SERVICE_OPTIONS = ['Standard cleaning', 'Deep cleaning', 'Move In/Out cleaning'];
@@ -47,6 +47,14 @@ export function Jobs() {
   const selectedId = Number(params.get('job')) || null;
   const requestedNew = params.get('new') === '1';
   const requestedDate = params.get('date') || undefined;
+  const [asOverlay, setAsOverlay] = useState(() => window.matchMedia('(max-width: 1050px)').matches);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1050px)');
+    const sync = (event: MediaQueryListEvent) => setAsOverlay(event.matches);
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
 
   useEffect(() => {
     if (requestedNew) setShowCreate(true);
@@ -144,7 +152,14 @@ export function Jobs() {
           </section>
           
           {selectedJob ? (
-            <JobDetail job={selectedJob} />
+            asOverlay ? (
+              <div className="modal-scrim" onClick={() => setLocation('/jobs')}>
+                <div className="detail-overlay" onClick={(e) => e.stopPropagation()}>
+                  <button className="icon-button detail-overlay-close" onClick={() => setLocation('/jobs')} aria-label="Close job" data-testid="button-close-job-detail"><X size={17} /></button>
+                  <JobDetail job={selectedJob} />
+                </div>
+              </div>
+            ) : <JobDetail job={selectedJob} />
           ) : (
             <div className="panel detail-placeholder dot-grid">
               <ClipboardCheck size={28} />
@@ -158,6 +173,53 @@ export function Jobs() {
       )}
       
       {showCreate && <CreateJobDialog pending={create.isPending} initialDate={requestedDate} onClose={closeCreate} onSubmit={submitCreate} />}
+    </div>
+  );
+}
+
+function EditJobDialog({ job, onClose, onSubmit, pending }: { job: Job; onClose: () => void; onSubmit: (data: Record<string, unknown>) => void; pending: boolean }) {
+  const [form, setForm] = useState({
+    scheduledDate: job.scheduledDate,
+    startTime: job.startTime,
+    endTime: job.endTime,
+    serviceType: job.serviceType,
+    serviceVariant: job.serviceVariant || '',
+    durationMinutes: job.durationMinutes ?? 180,
+    addOns: job.addOns || [],
+  });
+
+  const toggleAddOn = (addOn: string) => setForm((current) => ({ ...current, addOns: current.addOns.includes(addOn) ? current.addOns.filter((item) => item !== addOn) : [...current.addOns, addOn] }));
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <form className="modal panel" onClick={(e) => e.stopPropagation()} onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(form); }}>
+        <div className="modal-head">
+          <div><span className="eyebrow">Work order</span><h3>Edit job</h3></div>
+          <button type="button" className="icon-button" onClick={onClose} data-testid="button-close-edit-job"><X size={17} /></button>
+        </div>
+        <div className="form-grid">
+          <label>Date<input type="date" required value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} data-testid="input-edit-date" /></label>
+          <label>Duration (minutes)<input type="number" min={30} step={30} value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: Number(e.target.value) })} data-testid="input-edit-duration" /></label>
+          <label>Start<input type="time" required value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} data-testid="input-edit-start" /></label>
+          <label>End<input type="time" required value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} data-testid="input-edit-end" /></label>
+          <label>Service<select value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })} data-testid="select-edit-service">
+            {SERVICE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select></label>
+          <label>Variant<input value={form.serviceVariant} onChange={(e) => setForm({ ...form, serviceVariant: e.target.value })} data-testid="input-edit-variant" /></label>
+          <fieldset className="span-2 add-on-field">
+            <legend>Add-ons</legend>
+            <div>
+              {['Laundry', 'Inside Oven', 'Inside Fridge', 'Inside Cabinets'].map((addOn) => (
+                <label key={addOn}><input type="checkbox" checked={form.addOns.includes(addOn)} onChange={() => toggleAddOn(addOn)} />{addOn}</label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="button button-secondary" onClick={onClose}>Cancel</button>
+          <button className="button button-primary" disabled={pending} data-testid="button-save-job-edit">{pending ? 'Saving…' : 'Save changes'}</button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -311,7 +373,8 @@ function JobDetail({ job }: { job: Job }) {
   const [reminderTitle, setReminderTitle] = useState('');
   const [reminderBody, setReminderBody] = useState('');
   const [whatsappTemplate, setWhatsappTemplate] = useState<'assignment' | 'reminder' | 'schedule' | 'job'>('job');
-  
+  const [editing, setEditing] = useState(false);
+
   const current = detail.data || job;
   
   const patch = (data: Parameters<typeof update.mutate>[0]['data']) => {
@@ -354,6 +417,9 @@ function JobDetail({ job }: { job: Job }) {
         <div><span>Service</span><strong>{current.serviceType}</strong></div>
         <div><span>Contact</span><strong>{current.clientPhone || 'Not provided'}</strong></div>
       </div>
+
+      <button className="button button-secondary" onClick={() => setEditing(true)} data-testid="button-edit-job"><Edit2 size={15} />Edit or reschedule</button>
+      {editing ? <EditJobDialog job={current} pending={update.isPending} onClose={() => setEditing(false)} onSubmit={(data) => { patch(data); setEditing(false); }} /> : null}
       
       <div className="detail-section">
         <div className="detail-section-head" style={{ marginBottom: '6px' }}>

@@ -229,6 +229,8 @@
 .day-today { color: hsl(var(--primary)); } .day-today strong { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); border-radius: 50%; width: 25px; height: 25px; display: grid; place-items: center; }
 .schedule-row { display: grid; grid-template-columns: 65px repeat(7, 1fr); min-width: 740px; min-height: 490px; }
 .time-axis { display: flex; flex-direction: column; justify-content: space-between; padding: 22px 9px 21px 12px; color: hsl(var(--muted-foreground)); font: 9px var(--app-font-mono); }
+.detail-overlay { position: relative; width: min(620px, 100%); max-height: calc(100dvh - 36px); overflow-y: auto; }
+.detail-overlay-close { position: absolute; z-index: 1; top: 14px; right: 14px; background: hsl(var(--card)); }
 .month-board { padding: 0; overflow: hidden; }
 .month-head { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid hsl(var(--border)); }
 .month-head span { padding: 10px 8px; color: hsl(var(--muted-foreground)); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
