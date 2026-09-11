@@ -260,6 +260,7 @@ router.post("/jobs/:jobId/complete", async (req, res) => {
 });
 
 router.post("/jobs/:jobId/photos", async (req, res) => {
+  if (!(await canAccessJob(req, id(req.params.jobId)))) { res.status(403).json({ error: "Job is not assigned to you" }); return; }
   const input = body(req);
   if (
     !isProofPhotoObjectPath(input.objectPath) ||
@@ -267,7 +268,6 @@ router.post("/jobs/:jobId/photos", async (req, res) => {
     !isProofPhotoContentType(input.contentType) ||
     !isProofPhotoSize(input.byteSize)
   ) { res.status(400).json({ error: "A valid uploaded proof photo, type, size, and kind(before|after) are required" }); return; }
-  if (!(await canAccessJob(req, id(req.params.jobId)))) { res.status(403).json({ error: "Job is not assigned to you" }); return; }
   const [photo] = await db.insert(proofPhotosTable).values({ jobId: id(req.params.jobId), kind: input.kind, objectPath: input.objectPath, contentType: input.contentType, byteSize: input.byteSize }).returning(); res.status(201).json(photo);
 });
 router.get("/jobs/:jobId/photos", async (req, res) => { if (!(await canAccessJob(req, id(req.params.jobId)))) { res.status(403).json({ error: "Job is not assigned to you" }); return; } res.json((await db.select().from(proofPhotosTable).where(eq(proofPhotosTable.jobId, id(req.params.jobId)))).map(photo => ({ ...photo, readUrl: `/api/storage/objects${photo.objectPath.replace("/objects", "")}` }))); });

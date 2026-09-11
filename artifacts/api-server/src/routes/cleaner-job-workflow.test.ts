@@ -236,7 +236,12 @@ describe("cleaner assigned-job workflow", () => {
         const beforePhoto = expectStatus(await request(baseUrl, `/jobs/${job.id}/photos`, {
           method: "POST",
           headers: { "x-dev-user-id": assignedCleanerUserId },
-          body: { kind: "before", objectPath: "/objects/private/workflow-before.jpg" },
+          body: {
+            kind: "before",
+            objectPath: "/objects/uploads/00000000-0000-4000-8000-000000000001",
+            contentType: "image/jpeg",
+            byteSize: 1024,
+          },
         }), 201) as { id: number };
         photoIds.push(beforePhoto.id);
         const oneProof = expectStatus(await request(baseUrl, `/jobs/${job.id}/photos`, {
@@ -251,7 +256,12 @@ describe("cleaner assigned-job workflow", () => {
         const afterPhoto = expectStatus(await request(baseUrl, `/jobs/${job.id}/photos`, {
           method: "POST",
           headers: { "x-dev-user-id": assignedCleanerUserId },
-          body: { kind: "after", objectPath: "/objects/private/workflow-after.jpg" },
+          body: {
+            kind: "after",
+            objectPath: "/objects/uploads/00000000-0000-4000-8000-000000000002",
+            contentType: "image/jpeg",
+            byteSize: 1024,
+          },
         }), 201) as { id: number };
         photoIds.push(afterPhoto.id);
         const bothProofs = expectStatus(await request(baseUrl, `/jobs/${job.id}/photos`, {
