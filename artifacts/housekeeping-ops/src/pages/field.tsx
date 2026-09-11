@@ -98,6 +98,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
   const photos = useListProofPhotos(jobId, { query: { enabled: !!jobId, queryKey: ['proofPhotos', jobId] } });
 
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [incidentText, setIncidentText] = useState('');
   const [incidentSeverity, setIncidentSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
   const [showCorrection, setShowCorrection] = useState(false);
@@ -159,26 +160,33 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
     if (!file) return;
     
     setIsUploading(true);
+    setUploadError(null);
     try {
       const { uploadURL, objectPath } = await requestUpload.mutateAsync({
         data: { name: file.name, size: file.size, contentType: file.type }
       });
-      
-      await fetch(uploadURL, {
+
+      const upload = await fetch(uploadURL, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
         body: file
       });
-      
+      // Without this check a failed upload still registered the photo, so the job looked
+      // documented while the file was never stored.
+      if (!upload.ok) throw new Error(`Upload failed with status ${upload.status}`);
+
       await registerPhoto.mutateAsync({
         jobId, data: { kind, objectPath, contentType: file.type, byteSize: file.size }
       });
-      
+
       void refetch();
+      void photos.refetch();
     } catch (err) {
       console.error(err);
+      setUploadError('That photo did not upload. Check your signal and try again.');
     } finally {
       setIsUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -239,6 +247,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
           ) : (
             <button className="button button-primary" style={{ width: '100%' }} onClick={handleClockIn} disabled={clockIn.isPending}><Clock3 size={15}/> Clock in</button>
           )}
+          {clockIn.isError || clockOut.isError ? <p className="form-error" data-testid="text-clock-error">That did not go through. Check your signal and try again.</p> : null}
 
           {showCorrection && activeEntry && (
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
@@ -273,6 +282,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
             <div><span className="eyebrow">Proof</span><h3>Photos</h3></div>
             {isUploading && <span style={{ fontSize: '10px', color: 'hsl(var(--primary))' }}>Uploading...</span>}
           </div>
+          {uploadError ? <p className="form-error" data-testid="text-upload-error">{uploadError}</p> : null}
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
             <label className="button button-secondary" style={{ cursor: 'pointer', textAlign: 'center' }}>
