@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DashboardSummaryOperationsItem } from './dashboardSummaryOperationsItem';
 import type { Job } from './job';
 
 export interface DashboardSummary {
@@ -12,5 +13,9 @@ export interface DashboardSummary {
   openJobs: number;
   completedThisWeek: number;
   attentionNeeded: number;
+  pendingIncidents: number;
+  pendingCorrections: number;
+  unreadNotifications: number;
+  operations: DashboardSummaryOperationsItem[];
   nextJob: Job | null;
 }

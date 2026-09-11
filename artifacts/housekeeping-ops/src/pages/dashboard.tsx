@@ -1,8 +1,8 @@
-import { useGetDashboardSummary, useGetActivity, useListJobs, getGetDashboardSummaryQueryKey, getGetActivityQueryKey } from '@workspace/api-client-react';
+import { useGetDashboardSummary, useGetActivity, useListJobs, useTriggerDailySummary, getGetDashboardSummaryQueryKey, getGetActivityQueryKey } from '@workspace/api-client-react';
 import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
-import { CalendarDays, Zap, CheckCircle2, AlertTriangle, Clock3, MapPin, ArrowRight, Activity as ActivityIcon } from 'lucide-react';
+import { CalendarDays, Zap, CheckCircle2, AlertTriangle, Clock3, MapPin, ArrowRight, Activity as ActivityIcon, BellRing } from 'lucide-react';
 import { LoadingState, ErrorState, PageIntro, EmptyState, Badge, statusTone, statusLabel, formatTime, formatDate, Avatar } from '@/lib/shared';
 
 export function Dashboard() {
@@ -10,6 +10,7 @@ export function Dashboard() {
   const activity = useGetActivity();
   const jobs = useListJobs();
   const qc = useQueryClient();
+  const triggerSummary = useTriggerDailySummary();
   
   if (summary.isLoading || activity.isLoading || jobs.isLoading) return <LoadingState label="Setting up your day" />;
   if (summary.isError || activity.isError || jobs.isError) return <ErrorState onRetry={() => { void qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }); void qc.invalidateQueries({ queryKey: getGetActivityQueryKey() }); }} />;
@@ -20,7 +21,7 @@ export function Dashboard() {
   
   return (
     <div className="content-stack">
-      <PageIntro eyebrow={`${weekday} · live board`} title="The day, at a glance." body="Keep the crew moving and every handoff documented." action={<Link href="/schedule" className="button button-secondary" data-testid="link-view-schedule">Open schedule <ArrowRight size={15} /></Link>} />
+      <PageIntro eyebrow={`${weekday} · live board`} title="The day, at a glance." body="Keep the crew moving and every handoff documented." action={<div style={{ display: 'flex', gap: '8px' }}><button className="button button-secondary" disabled={triggerSummary.isPending} onClick={() => triggerSummary.mutate(undefined)}><BellRing size={15} />{triggerSummary.isPending ? 'Sending…' : 'Send daily summary'}</button><Link href="/schedule" className="button button-secondary" data-testid="link-view-schedule">Open schedule <ArrowRight size={15} /></Link></div>} />
       
       <section className="metric-grid animate-rise delay-1">
         {[
@@ -59,6 +60,21 @@ export function Dashboard() {
           )}
         </section>
       </div>
+
+      <section className="panel">
+        <div className="section-heading"><div><span className="eyebrow">Today’s operations</span><h3>Assignment health</h3></div><span className="muted-copy">{data?.unreadNotifications ?? 0} unread owner notifications</span></div>
+        {data?.operations?.length ? (
+          <div className="activity-list">
+            {data.operations.map((operation) => (
+              <Link href={`/jobs?job=${operation.id}`} className="activity-row" key={operation.id}>
+                <span className={`activity-icon activity-${operation.status}`}><CalendarDays size={15} /></span>
+                <div className="activity-copy"><strong>{operation.clientName} · {formatTime(operation.startTime)}</strong><span>{operation.assignedEmployees?.map((employee) => employee.name).join(', ') || 'Unassigned'} · {operation.assignments?.map((assignment) => assignment.status).join(', ') || 'No acknowledgement'}</span></div>
+                <small>{operation.pendingIncidents + operation.pendingCorrections ? `${operation.pendingIncidents} incidents · ${operation.pendingCorrections} corrections` : 'Clear'}</small>
+              </Link>
+            ))}
+          </div>
+        ) : <EmptyState title="No jobs today" body="Today’s assigned work will appear here once it is scheduled." />}
+      </section>
       
       <section className="panel activity-panel animate-rise delay-3">
         <div className="section-heading"><div><span className="eyebrow">The paper trail</span><h3>Recent activity</h3></div><Link href="/activity" className="text-link" data-testid="link-all-activity">All activity <ArrowRight size={14} /></Link></div>

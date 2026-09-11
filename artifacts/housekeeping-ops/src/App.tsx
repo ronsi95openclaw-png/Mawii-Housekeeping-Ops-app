@@ -7,7 +7,11 @@ import {
   Menu, Bell, Plus, X, ChevronRight, Users, Repeat, ShieldCheck, MapPin,
   DollarSign, Activity as ActivityIcon, LogOut
 } from 'lucide-react';
-import { useHealthCheck, useListJobs, useGetEmployeeMe } from '@workspace/api-client-react';
+import {
+  useHealthCheck, useListJobs, useGetEmployeeMe, useListNotifications,
+  useMarkNotificationRead, useMarkAllNotificationsRead,
+  getListNotificationsQueryKey,
+} from '@workspace/api-client-react';
 
 import { ErrorBoundary } from '@/components/error-boundary';
 import NotFound from '@/pages/not-found';
@@ -23,6 +27,7 @@ import { Recurring } from '@/pages/recurring';
 import { Field } from '@/pages/field';
 import { Quality, Payouts, Reports, ActivityPage } from '@/pages/misc';
 import { SignInPage } from '@/pages/auth';
+import { ClaimEmployee } from '@/pages/claim';
 
 const queryClient = new QueryClient();
 
@@ -52,11 +57,16 @@ function Shell({ children }: { children: ReactNode }) {
   const { user } = useUser();
   const { signOut } = useClerk();
   const employeeQuery = useGetEmployeeMe();
+  const notifications = useListNotifications({ limit: 30 }, { query: { queryKey: getListNotificationsQueryKey({ limit: 30 }), enabled: employeeQuery.isSuccess, refetchInterval: 30_000 } });
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const activeLocation = location.split('?')[0];
   const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
 
   if (employeeQuery.isLoading) return <div style={{height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><LoadingState label="Loading profile" /></div>;
+  if (employeeQuery.isError) return <ClaimEmployee onClaimed={() => void employeeQuery.refetch()} />;
 
   const role = employeeQuery.data?.role || 'cleaner';
   const isCleaner = role === 'cleaner';
@@ -115,9 +125,32 @@ function Shell({ children }: { children: ReactNode }) {
             <h2>{activeLocation === '/' ? `Good morning, ${user?.firstName || 'Danna'}` : navItems.find((item) => item.href === activeLocation)?.label || 'Operations'}</h2>
           </div>
           <div className="topbar-actions">
+            <div style={{ position: 'relative' }}>
+                <button className="icon-button notification-button" onClick={() => setShowNotifications((value) => !value)} data-testid="button-notifications" aria-label="Open notifications">
+                  <Bell size={18} />
+                  {!!notifications.data?.some((item) => !item.readAt) && <i />}
+                </button>
+                {showNotifications && (
+                  <div className="notification-popover panel">
+                    <div className="section-heading">
+                      <div><span className="eyebrow">Operations inbox</span><h3>Notifications</h3></div>
+                      <button className="text-button" onClick={() => markAllRead.mutate(undefined, { onSuccess: () => void queryClient.invalidateQueries({ queryKey: getListNotificationsQueryKey({ limit: 30 }) }) })}>Mark all read</button>
+                    </div>
+                    {notifications.data?.length ? notifications.data.slice(0, 8).map((item) => (
+                      <button
+                        className={`notification-row ${item.readAt ? '' : 'notification-unread'}`}
+                        key={item.id}
+                        onClick={() => markRead.mutate({ id: item.id }, { onSuccess: () => void queryClient.invalidateQueries({ queryKey: getListNotificationsQueryKey({ limit: 30 }) }) })}
+                      >
+                        <strong>{item.title}</strong>
+                        <span>{item.body}</span>
+                      </button>
+                    )) : <p className="muted-copy">You’re all caught up.</p>}
+                  </div>
+                )}
+            </div>
             {!isCleaner && (
               <>
-                <button className="icon-button notification-button" data-testid="button-notifications"><Bell size={18} /><i /></button>
                 <Link href="/jobs" className="button button-primary top-add" data-testid="link-new-job"><Plus size={16} />New job</Link>
               </>
             )}

@@ -1,13 +1,14 @@
 import { Router, type IRouter } from "express";
-import crypto from "node:crypto";
-import { and, eq, gte, lte, asc, isNull } from "drizzle-orm";
-import { db, customersTable, addressesTable, servicePlansTable, serviceOccurrencesTable, employeesTable, employeeJobNotesTable, jobAssignmentsTable, timeEntriesTable, proofPhotosTable, incidentsTable, incidentHistoryTable, workerRatesTable, payPeriodsTable, payoutRecordsTable, activityEventsTable, messagesTable, jobsTable } from "@workspace/db";
+import crypto, { createHash, randomBytes } from "node:crypto";
+import { and, eq, gte, lte, asc, desc, inArray, isNull } from "drizzle-orm";
+import { db, customersTable, addressesTable, servicePlansTable, serviceOccurrencesTable, employeesTable, employeeBindingTokensTable, employeeJobNotesTable, jobAssignmentsTable, timeEntriesTable, proofPhotosTable, incidentsTable, incidentHistoryTable, workerRatesTable, payPeriodsTable, payoutRecordsTable, activityEventsTable, messagesTable, notificationsTable, jobsTable } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { generateOccurrences } from "../lib/recurrence";
 import { calculatePayoutCents, calculateWorkedMinutes } from "../lib/time-entries";
 import { formatPayoutAmountCents, parsePayoutAmountCents } from "../lib/payouts";
 import { canCompleteJob, canTransitionIncident, canTransitionPayPeriod, isChronologicalTimeEntry, isValidBreakMinutes, isValidCorrectionMinutes } from "../lib/operations-rules";
 import { canCleanerAccessJob } from "../lib/job-access";
+import { employeeForClerkUser, notifyEmployees, notifyAssignedCleaners } from "../lib/notifications";
 
 const router: IRouter = Router();
 router.use((req, res, next) => {
@@ -19,6 +20,7 @@ router.use((req, res, next) => {
 });
 const id = (value: string | string[]) => Number.parseInt(Array.isArray(value) ? value[0]! : value, 10);
 const body = (req: any) => req.body ?? {};
+const hashBindingToken = (token: string) => createHash("sha256").update(token).digest("hex");
 function chicagoBoundary(date: string, endOfDay: boolean) {
   const [year, month, day] = date.split("-").map(Number);
   const rough = new Date(Date.UTC(year!, month! - 1, day!, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0));
@@ -158,8 +160,38 @@ router.get("/employees", requireRole("owner", "manager"), async (_req, res) => r
 router.post("/employees", requireRole("owner"), async (req, res) => {
   const input = body(req);
   if (!input.name) { res.status(400).json({ error: "name is required" }); return; }
-  const [employee] = await db.insert(employeesTable).values({ name: input.name, clerkUserId: input.clerkUserId ?? `pending-${crypto.randomUUID()}`, role: input.role ?? "cleaner", phone: input.phone, active: input.active ?? "true" }).returning();
-  res.status(201).json(employee);
+  const role = input.role ?? "cleaner";
+  const isPendingCleaner = role === "cleaner" && (!input.clerkUserId || String(input.clerkUserId).startsWith("pending-"));
+  const clerkUserId = isPendingCleaner ? `pending-${crypto.randomUUID()}` : input.clerkUserId;
+  if (!clerkUserId) { res.status(400).json({ error: "clerkUserId is required for owners and managers" }); return; }
+  const [employee] = await db.insert(employeesTable).values({ name: input.name, clerkUserId, role, phone: input.phone, active: input.active ?? "true" }).returning();
+  let bindingToken: string | undefined;
+  if (isPendingCleaner) {
+    bindingToken = randomBytes(32).toString("hex");
+    await db.insert(employeeBindingTokensTable).values({
+      employeeId: employee.id,
+      tokenHash: hashBindingToken(bindingToken),
+      createdByClerkUserId: req.authContext!.clerkUserId,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+  }
+  res.status(201).json({ ...employee, bindingToken });
+});
+router.post("/employees/claim", requireAuth, async (req, res): Promise<void> => {
+  const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
+  if (!token) { res.status(400).json({ error: "binding token is required" }); return; }
+  const clerkUserId = req.authContext!.clerkUserId;
+  if (await employeeForClerkUser(clerkUserId)) { res.status(409).json({ error: "This Clerk user is already linked to an employee" }); return; }
+  const [binding] = await db.select().from(employeeBindingTokensTable).where(eq(employeeBindingTokensTable.tokenHash, hashBindingToken(token)));
+  if (!binding || binding.claimedAt || binding.expiresAt <= new Date()) { res.status(400).json({ error: "Binding token is invalid or expired" }); return; }
+  const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, binding.employeeId));
+  if (!employee || employee.role !== "cleaner" || employee.active !== "true" || !employee.clerkUserId.startsWith("pending-")) {
+    res.status(409).json({ error: "Employee is not eligible for binding" }); return;
+  }
+  const [claimed] = await db.update(employeesTable).set({ clerkUserId }).where(and(eq(employeesTable.id, employee.id), eq(employeesTable.clerkUserId, employee.clerkUserId))).returning();
+  if (!claimed) { res.status(409).json({ error: "Employee was already claimed" }); return; }
+  await db.update(employeeBindingTokensTable).set({ claimedAt: new Date() }).where(eq(employeeBindingTokensTable.id, binding.id));
+  res.json(claimed);
 });
 router.patch("/employees/:id", requireRole("owner"), async (req, res) => {
   const [employee] = await db.update(employeesTable).set(body(req)).where(eq(employeesTable.id, id(req.params.id))).returning();
@@ -212,6 +244,13 @@ router.post("/jobs/:jobId/complete", async (req, res) => {
   const employee = await currentEmployee(req);
   const [completed] = await db.update(jobsTable).set({ status: "completed", completedAt: new Date(), completedByEmployeeId: employee?.id }).where(eq(jobsTable.id, jobId)).returning();
   await event("job", "Job completed", undefined, jobId);
+  await notifyEmployees((await db.select({ id: employeesTable.id }).from(employeesTable).where(inArray(employeesTable.role, ["owner", "manager"]))).map(({ id: employeeId }) => ({
+    employeeId,
+    jobId,
+    kind: "job_completed",
+    title: "Job completed",
+    body: `${job.clientName} was completed with checklist, proof, and clock-out recorded.`,
+  })));
   res.json(completed);
 });
 
@@ -258,6 +297,69 @@ router.get("/jobs/:jobId/messages", async (req, res) => {
     return;
   }
   res.json(await db.select().from(messagesTable).where(eq(messagesTable.jobId, jobId)).orderBy(asc(messagesTable.createdAt)));
+});
+
+router.post("/jobs/:jobId/messages", async (req, res): Promise<void> => {
+  const jobId = id(req.params.jobId);
+  const messageBody = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+  if (!messageBody) { res.status(400).json({ error: "body is required" }); return; }
+  if (!(await canCleanerAccessJob(req, jobId))) { res.status(403).json({ error: "Job is not assigned to this cleaner" }); return; }
+  const role = (req.authContext?.role ?? "").toLowerCase();
+  const audience = req.body?.audience ?? "employee";
+  if (audience !== "employee" && !["owner", "manager"].includes(role)) {
+    res.status(403).json({ error: "Only owners and managers can queue customer messages" }); return;
+  }
+  const intent = {
+    recipient: typeof req.body?.recipient === "string" ? req.body.recipient : "job",
+    body: messageBody,
+    channel: audience === "employee" ? "internal" : (req.body?.channel ?? "sms"),
+    audience,
+  };
+  const [message] = await db.insert(messagesTable).values({
+    jobId,
+    recipient: intent.recipient,
+    body: intent.body,
+    channel: intent.channel,
+    audience: intent.audience,
+    recipientPhone: typeof req.body?.recipientPhone === "string" ? req.body.recipientPhone : null,
+    recipientName: typeof req.body?.recipientName === "string" ? req.body.recipientName : null,
+    status: "queued",
+    provider: "internal",
+    actorClerkUserId: req.authContext?.clerkUserId,
+    metadata: typeof req.body?.metadata === "object" && req.body.metadata ? req.body.metadata : {},
+  }).returning();
+  if (audience === "employee") {
+    await notifyAssignedCleaners(jobId, {
+      kind: "message",
+      title: "New job message",
+      body: messageBody,
+    });
+  }
+  await event("message", "Internal job message sent", messageBody, jobId);
+  res.status(201).json(message);
+});
+
+router.get("/notifications", async (req, res): Promise<void> => {
+  const employee = await currentEmployee(req);
+  if (!employee) { res.status(403).json({ error: "No employee profile is linked to this Clerk user" }); return; }
+  const limit = Math.min(Math.max(Number(req.query.limit ?? 30), 1), 100);
+  const rows = await db.select().from(notificationsTable).where(eq(notificationsTable.employeeId, employee.id)).orderBy(desc(notificationsTable.createdAt)).limit(limit);
+  res.json(rows);
+});
+
+router.post("/notifications/:id/read", async (req, res): Promise<void> => {
+  const employee = await currentEmployee(req);
+  if (!employee) { res.status(403).json({ error: "No employee profile is linked to this Clerk user" }); return; }
+  const [notification] = await db.update(notificationsTable).set({ readAt: new Date() }).where(and(eq(notificationsTable.id, id(req.params.id)), eq(notificationsTable.employeeId, employee.id))).returning();
+  if (!notification) { res.status(404).json({ error: "Notification not found" }); return; }
+  res.json(notification);
+});
+
+router.post("/notifications/read-all", async (req, res): Promise<void> => {
+  const employee = await currentEmployee(req);
+  if (!employee) { res.status(403).json({ error: "No employee profile is linked to this Clerk user" }); return; }
+  await db.update(notificationsTable).set({ readAt: new Date() }).where(and(eq(notificationsTable.employeeId, employee.id), isNull(notificationsTable.readAt)));
+  res.status(204).send();
 });
 
 router.post("/pay-periods", requireRole("owner", "manager"), async (req, res) => { const input = body(req); if (!input.startsOn || !input.endsOn) { res.status(400).json({ error: "startsOn and endsOn are required" }); return; } const [period] = await db.insert(payPeriodsTable).values({ startsOn: input.startsOn, endsOn: input.endsOn }).onConflictDoNothing().returning(); res.status(201).json(period); });

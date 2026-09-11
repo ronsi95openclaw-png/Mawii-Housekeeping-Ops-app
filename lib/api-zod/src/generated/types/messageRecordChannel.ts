@@ -10,6 +10,7 @@ export type MessageRecordChannel = typeof MessageRecordChannel[keyof typeof Mess
 
 
 export const MessageRecordChannel = {
+  internal: 'internal',
   sms: 'sms',
   whatsapp: 'whatsapp',
 } as const;

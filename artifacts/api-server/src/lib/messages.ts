@@ -1,4 +1,4 @@
-export type MessageChannel = "sms" | "whatsapp";
+export type MessageChannel = "internal" | "sms" | "whatsapp";
 export type MessageAudience = "customer" | "employee";
 
 export interface MessageIntent {

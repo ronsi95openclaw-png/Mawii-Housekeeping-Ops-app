@@ -25,6 +25,64 @@ export const GetDashboardSummaryResponse = zod.object({
   "openJobs": zod.number().int(),
   "completedThisWeek": zod.number().int(),
   "attentionNeeded": zod.number().int(),
+  "pendingIncidents": zod.number().int(),
+  "pendingCorrections": zod.number().int(),
+  "unreadNotifications": zod.number().int(),
+  "operations": zod.array(zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']),
+  "serviceType": zod.string(),
+  "serviceVariant": zod.string().nullish(),
+  "addOns": zod.array(zod.string()).optional(),
+  "durationMinutes": zod.number().int().nullish(),
+  "frequency": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "accessInstructions": zod.string().nullish(),
+  "team": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "role": zod.string(),
+  "phone": zod.string(),
+  "status": zod.enum(['available', 'assigned', 'off']),
+  "initials": zod.string().optional()
+})),
+  "assignedEmployees": zod.array(zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
+})).optional(),
+  "assignments": zod.array(zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "status": zod.string()
+})).optional(),
+  "checklist": zod.array(zod.object({
+  "id": zod.number().int(),
+  "label": zod.string(),
+  "completed": zod.boolean()
+})),
+  "photos": zod.array(zod.object({
+  "id": zod.number().int(),
+  "url": zod.string().url(),
+  "label": zod.string(),
+  "createdAt": zod.coerce.date()
+})).optional(),
+  "clientPhone": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+}).and(zod.object({
+  "pendingIncidents": zod.number().int(),
+  "pendingCorrections": zod.number().int(),
+  "notificationCount": zod.number().int()
+}))),
   "nextJob": zod.union([zod.object({
   "id": zod.number().int(),
   "clientName": zod.string(),
@@ -53,7 +111,14 @@ export const GetDashboardSummaryResponse = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
+})).optional(),
+  "assignments": zod.array(zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "status": zod.string()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -69,6 +134,16 @@ export const GetDashboardSummaryResponse = zod.object({
   "clientPhone": zod.string().nullish(),
   "createdAt": zod.coerce.date().optional()
 }),zod.null()])
+})
+
+
+/**
+ * @summary Trigger the daily internal operations summary
+ */
+export const TriggerDailySummaryResponse = zod.object({
+  "summaryDate": zod.coerce.date(),
+  "notifiedCount": zod.number().int(),
+  "summary": zod.string()
 })
 
 
@@ -125,7 +200,14 @@ export const ListJobsResponseItem = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
+})).optional(),
+  "assignments": zod.array(zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "status": zod.string()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -198,7 +280,14 @@ export const CreateJobResponse = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
+})).optional(),
+  "assignments": zod.array(zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "status": zod.string()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -251,7 +340,14 @@ export const GetJobResponse = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
+})).optional(),
+  "assignments": zod.array(zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "status": zod.string()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -322,7 +418,14 @@ export const UpdateJobResponse = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
+})).optional(),
+  "assignments": zod.array(zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "status": zod.string()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -380,7 +483,14 @@ export const UpdateJobChecklistResponse = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
+})).optional(),
+  "assignments": zod.array(zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "status": zod.string()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -555,7 +665,14 @@ export const ImportElevateJobResponse = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
+})).optional(),
+  "assignments": zod.array(zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "status": zod.string()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -910,7 +1027,25 @@ export const GetEmployeeMeResponse = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
+})
+
+
+
+
+
+export const ClaimEmployeeBody = zod.object({
+  "token": zod.string().min(1)
+})
+
+export const ClaimEmployeeResponse = zod.object({
+  "id": zod.number().int(),
+  "clerkUserId": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['owner', 'manager', 'cleaner']),
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
 })
 
 
@@ -919,7 +1054,8 @@ export const ListEmployeesResponseItem = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
 })
 export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem)
 
@@ -937,7 +1073,8 @@ export const CreateEmployeeResponse = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
 })
 
 
@@ -958,7 +1095,8 @@ export const UpdateEmployeeResponse = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
 })
 
 
@@ -1233,7 +1371,14 @@ export const CompleteAssignedJobResponse = zod.object({
   "clerkUserId": zod.string(),
   "name": zod.string(),
   "role": zod.enum(['owner', 'manager', 'cleaner']),
-  "phone": zod.string().nullish()
+  "phone": zod.string().nullish(),
+  "bindingToken": zod.string().nullish()
+})).optional(),
+  "assignments": zod.array(zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "status": zod.string()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -1379,7 +1524,7 @@ export const ListJobMessagesResponseItem = zod.object({
   "id": zod.number().int(),
   "recipient": zod.string(),
   "body": zod.string(),
-  "channel": zod.enum(['sms', 'whatsapp']),
+  "channel": zod.enum(['internal', 'sms', 'whatsapp']),
   "audience": zod.enum(['customer', 'employee']),
   "status": zod.string(),
   "provider": zod.string(),
@@ -1397,6 +1542,121 @@ export const ListJobMessagesResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListJobMessagesResponse = zod.array(ListJobMessagesResponseItem)
+
+
+export const SendFieldJobMessageParams = zod.object({
+  "jobId": zod.coerce.number().int()
+})
+
+
+
+
+export const SendFieldJobMessageBody = zod.object({
+  "body": zod.string().min(1),
+  "recipient": zod.string().optional(),
+  "audience": zod.enum(['employee']).optional()
+})
+
+export const SendFieldJobMessageResponse = zod.object({
+  "id": zod.number().int(),
+  "recipient": zod.string(),
+  "body": zod.string(),
+  "channel": zod.enum(['internal', 'sms', 'whatsapp']),
+  "audience": zod.enum(['customer', 'employee']),
+  "status": zod.string(),
+  "provider": zod.string(),
+  "recipientPhone": zod.string().nullish(),
+  "recipientName": zod.string().nullish(),
+  "providerMessageId": zod.string().nullish(),
+  "sentAt": zod.coerce.date().nullish(),
+  "deliveredAt": zod.coerce.date().nullish(),
+  "failedAt": zod.coerce.date().nullish(),
+  "failureReason": zod.string().nullish(),
+  "metadata": zod.object({
+
+}).passthrough().optional(),
+  "actorClerkUserId": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const ListJobRemindersParams = zod.object({
+  "jobId": zod.coerce.number().int()
+})
+
+export const ListJobRemindersResponseItem = zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "createdByEmployeeId": zod.number().int().nullish(),
+  "title": zod.string(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListJobRemindersResponse = zod.array(ListJobRemindersResponseItem)
+
+
+export const CreateJobReminderParams = zod.object({
+  "jobId": zod.coerce.number().int()
+})
+
+
+
+
+
+export const CreateJobReminderBody = zod.object({
+  "title": zod.string().min(1),
+  "body": zod.string().min(1)
+})
+
+export const CreateJobReminderResponse = zod.object({
+  "id": zod.number().int(),
+  "jobId": zod.number().int(),
+  "createdByEmployeeId": zod.number().int().nullish(),
+  "title": zod.string(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const listNotificationsQueryLimitDefault = 30;
+export const listNotificationsQueryLimitMax = 100;
+
+
+
+export const ListNotificationsQueryParams = zod.object({
+  "limit": zod.coerce.number().int().min(1).max(listNotificationsQueryLimitMax).default(listNotificationsQueryLimitDefault)
+})
+
+export const ListNotificationsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "jobId": zod.number().int().nullish(),
+  "kind": zod.string(),
+  "title": zod.string(),
+  "body": zod.string(),
+  "readAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListNotificationsResponse = zod.array(ListNotificationsResponseItem)
+
+
+export const MarkNotificationReadParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const MarkNotificationReadResponse = zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "jobId": zod.number().int().nullish(),
+  "kind": zod.string(),
+  "title": zod.string(),
+  "body": zod.string(),
+  "readAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const MarkAllNotificationsReadResponse = zod.void()
 
 
 export const ListPayPeriodsResponseItem = zod.object({

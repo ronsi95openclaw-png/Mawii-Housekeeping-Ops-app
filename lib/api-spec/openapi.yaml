@@ -48,6 +48,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+  /dashboard/daily-summary:
+    post:
+      operationId: triggerDailySummary
+      tags: [dashboard]
+      summary: Trigger the daily internal operations summary
+      responses:
+        "201":
+          description: Summary notification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailySummaryResult"
   /activity:
     get:
       operationId: getActivity
@@ -402,6 +414,23 @@ paths:
       operationId: getEmployeeMe
       tags: [field-ops]
       responses: { "200": { description: Employee, content: { application/json: { schema: { $ref: "#/components/schemas/Employee" } } } } }
+  /employees/claim:
+    post:
+      operationId: claimEmployee
+      tags: [field-ops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeClaimInput"
+      responses:
+        "200":
+          description: Claimed employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
   /employees:
     get:
       operationId: listEmployees
@@ -557,6 +586,90 @@ paths:
       tags: [field-ops]
       parameters: [{ $ref: "#/components/parameters/JobId" }]
       responses: { "200": { description: Messages, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MessageRecord" } } } } } }
+    post:
+      operationId: sendFieldJobMessage
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/JobId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FieldMessageInput"
+      responses:
+        "201":
+          description: Internal job message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageRecord"
+  /jobs/{jobId}/reminders:
+    get:
+      operationId: listJobReminders
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/JobId" }]
+      responses:
+        "200":
+          description: Internal reminders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Reminder"
+    post:
+      operationId: createJobReminder
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/JobId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReminderInput"
+      responses:
+        "201":
+          description: Internal reminder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reminder"
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [field-ops]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+      responses:
+        "200":
+          description: Notifications for the current employee
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+  /notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [field-ops]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: Read notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [field-ops]
+      responses:
+        "204":
+          description: Notifications marked read
   /pay-periods:
     get:
       operationId: listPayPeriods
@@ -617,7 +730,7 @@ components:
         - status
     DashboardSummary:
       type: object
-      required: [todayJobs, openJobs, completedThisWeek, attentionNeeded, nextJob]
+      required: [todayJobs, openJobs, completedThisWeek, attentionNeeded, pendingIncidents, pendingCorrections, unreadNotifications, operations, nextJob]
       properties:
         todayJobs:
           type: integer
@@ -627,10 +740,34 @@ components:
           type: integer
         attentionNeeded:
           type: integer
+        pendingIncidents:
+          type: integer
+        pendingCorrections:
+          type: integer
+        unreadNotifications:
+          type: integer
+        operations:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/Job"
+              - type: object
+                required: [pendingIncidents, pendingCorrections, notificationCount]
+                properties:
+                  pendingIncidents: { type: integer }
+                  pendingCorrections: { type: integer }
+                  notificationCount: { type: integer }
         nextJob:
           anyOf:
             - $ref: "#/components/schemas/Job"
             - type: "null"
+    DailySummaryResult:
+      type: object
+      required: [summaryDate, notifiedCount, summary]
+      properties:
+        summaryDate: { type: string, format: date }
+        notifiedCount: { type: integer }
+        summary: { type: string }
     Activity:
       type: object
       required: [id, type, title, detail, createdAt]
@@ -697,6 +834,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Employee"
+        assignments:
+          type: array
+          items:
+            $ref: "#/components/schemas/JobAssignment"
         checklist:
           type: array
           items:
@@ -1150,6 +1291,7 @@ components:
         name: { type: string }
         role: { type: string, enum: [owner, manager, cleaner] }
         phone: { type: ["string", "null"] }
+        bindingToken: { type: ["string", "null"] }
     EmployeeInput:
       type: object
       required: [name]
@@ -1159,6 +1301,11 @@ components:
         role: { type: string, enum: [owner, manager, cleaner] }
         phone: { type: string }
         active: { type: string }
+    EmployeeClaimInput:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, minLength: 1 }
     EmployeeUpdate:
       type: object
       properties:
@@ -1312,7 +1459,7 @@ components:
         id: { type: integer }
         recipient: { type: string }
         body: { type: string }
-        channel: { type: string, enum: [sms, whatsapp] }
+        channel: { type: string, enum: [internal, sms, whatsapp] }
         audience: { type: string, enum: [customer, employee] }
         status: { type: string }
         provider: { type: string }
@@ -1325,6 +1472,41 @@ components:
         failureReason: { type: ["string", "null"] }
         metadata: { type: object }
         actorClerkUserId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    FieldMessageInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1 }
+        recipient: { type: string }
+        audience: { type: string, enum: [employee] }
+    Reminder:
+      type: object
+      required: [id, jobId, title, body, createdAt]
+      properties:
+        id: { type: integer }
+        jobId: { type: integer }
+        createdByEmployeeId: { type: ["integer", "null"] }
+        title: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+    ReminderInput:
+      type: object
+      required: [title, body]
+      properties:
+        title: { type: string, minLength: 1 }
+        body: { type: string, minLength: 1 }
+    Notification:
+      type: object
+      required: [id, employeeId, kind, title, body, readAt, createdAt]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        jobId: { type: ["integer", "null"] }
+        kind: { type: string }
+        title: { type: string }
+        body: { type: string }
+        readAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     PayPeriod:
       type: object

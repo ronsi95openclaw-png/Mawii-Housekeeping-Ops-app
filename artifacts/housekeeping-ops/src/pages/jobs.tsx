@@ -4,7 +4,8 @@ import {
   useListJobs, useCreateJob, useGetJob, useUpdateJob, useUpdateJobChecklist, 
   useSendJobMessage, useListEmployees, useListJobMessages, useListCustomers, useListCustomerAddresses,
   useGetElevateImportStatus, getGetElevateImportStatusQueryKey,
-  getListJobsQueryKey, getGetJobQueryKey, getGetDashboardSummaryQueryKey, getListJobMessagesQueryKey
+  getListJobsQueryKey, getGetJobQueryKey, getGetDashboardSummaryQueryKey, getListJobMessagesQueryKey,
+  useListJobReminders, useCreateJobReminder, getListJobRemindersQueryKey
 } from '@workspace/api-client-react';
 import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -271,7 +272,11 @@ function JobDetail({ job }: { job: Job }) {
   const checklist = useUpdateJobChecklist();
   const sendMessage = useSendJobMessage();
   const messages = useListJobMessages(job.id, { query: { enabled: !!job.id, queryKey: getListJobMessagesQueryKey(job.id) } });
+  const reminders = useListJobReminders(job.id, { query: { enabled: !!job.id, queryKey: getListJobRemindersQueryKey(job.id) } });
+  const createReminder = useCreateJobReminder();
   const [message, setMessage] = useState('');
+  const [reminderTitle, setReminderTitle] = useState('');
+  const [reminderBody, setReminderBody] = useState('');
   const [whatsappTemplate, setWhatsappTemplate] = useState<'assignment' | 'reminder' | 'schedule' | 'job'>('job');
   
   const current = detail.data || job;
@@ -450,6 +455,32 @@ function JobDetail({ job }: { job: Job }) {
           <MessageSquare size={13} /> 
           Goes to {current.clientName}{current.clientPhone ? ` · ${current.clientPhone}` : ''} · Queued for future Twilio delivery · {sendMessage.isPending ? 'Queueing...' : 'Not delivered yet'}
         </span>
+      </div>
+
+      <div className="detail-section">
+        <div className="detail-section-head">
+          <div><span className="eyebrow">Internal operations</span><h3>Cleaner reminders</h3></div>
+        </div>
+        {reminders.data?.length ? (
+          <div style={{ display: 'grid', gap: '7px', marginBottom: '10px' }}>
+            {reminders.data.map((reminder) => <div key={reminder.id} style={{ padding: '8px', background: 'hsl(var(--secondary))', borderRadius: '7px' }}><strong>{reminder.title}</strong><p style={{ margin: '3px 0 0', fontSize: '11px' }}>{reminder.body}</p></div>)}
+          </div>
+        ) : <p className="muted-copy">No internal reminders have been sent.</p>}
+        <div className="form-grid">
+          <label>Reminder title<input value={reminderTitle} onChange={(event) => setReminderTitle(event.target.value)} placeholder="Arrival reminder" /></label>
+          <label className="span-2">Message<textarea rows={2} value={reminderBody} onChange={(event) => setReminderBody(event.target.value)} placeholder="Please confirm access details before leaving." /></label>
+        </div>
+        <button
+          className="button button-secondary"
+          disabled={!reminderTitle.trim() || !reminderBody.trim() || createReminder.isPending}
+          onClick={() => createReminder.mutate({ jobId: job.id, data: { title: reminderTitle.trim(), body: reminderBody.trim() } }, {
+            onSuccess: () => {
+              setReminderTitle('');
+              setReminderBody('');
+              void qc.invalidateQueries({ queryKey: getListJobRemindersQueryKey(job.id) });
+            },
+          })}
+        >{createReminder.isPending ? 'Sending…' : 'Send internal reminder'}</button>
       </div>
     </section>
   );

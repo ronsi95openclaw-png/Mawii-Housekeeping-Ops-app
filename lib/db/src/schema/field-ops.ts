@@ -80,7 +80,7 @@ export const payPeriodsTable = pgTable("pay_periods", {
 export const payoutRecordsTable = pgTable("payout_records", {
   id: serial("id").primaryKey(),
   payPeriodId: integer("pay_period_id").notNull().references(() => payPeriodsTable.id),
-  employeeId: integer("employee_id").notNull().references(() => employeesTable.id),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
   approvedMinutes: integer("approved_minutes").notNull().default(0),
   hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }).notNull(),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
@@ -122,16 +122,40 @@ export const messagesTable = pgTable("messages", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const remindersTable = pgTable("job_reminders", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  createdByEmployeeId: integer("created_by_employee_id").references(() => employeesTable.id),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const notificationsTable = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
+  jobId: integer("job_id"),
+  kind: text("kind").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertServicePlanSchema = createInsertSchema(servicePlansTable).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertOccurrenceSchema = createInsertSchema(serviceOccurrencesTable).omit({ id: true, createdAt: true });
 export const insertPhotoSchema = createInsertSchema(proofPhotosTable).omit({ id: true, createdAt: true });
 export const insertIncidentSchema = createInsertSchema(incidentsTable).omit({ id: true, createdAt: true });
 export const insertActivityEventSchema = createInsertSchema(activityEventsTable).omit({ id: true, createdAt: true });
 export const insertMessageSchema = createInsertSchema(messagesTable).omit({ id: true, createdAt: true });
+export const insertReminderSchema = createInsertSchema(remindersTable).omit({ id: true, createdAt: true });
+export const insertNotificationSchema = createInsertSchema(notificationsTable).omit({ id: true, createdAt: true });
 export type ServicePlan = typeof servicePlansTable.$inferSelect;
 export type ServiceOccurrence = typeof serviceOccurrencesTable.$inferSelect;
 export type ProofPhoto = typeof proofPhotosTable.$inferSelect;
 export type Incident = typeof incidentsTable.$inferSelect;
 export type ActivityEvent = typeof activityEventsTable.$inferSelect;
 export type Message = typeof messagesTable.$inferSelect;
+export type Reminder = typeof remindersTable.$inferSelect;
+export type Notification = typeof notificationsTable.$inferSelect;
 export type InsertServicePlan = z.infer<typeof insertServicePlanSchema>;

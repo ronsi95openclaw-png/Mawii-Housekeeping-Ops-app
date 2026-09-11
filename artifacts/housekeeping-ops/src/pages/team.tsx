@@ -15,6 +15,7 @@ export function Team() {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
+  const [issuedToken, setIssuedToken] = useState<{ name: string; token: string } | null>(null);
   
   const legacyTeam = useListTeam();
 
@@ -22,7 +23,11 @@ export function Team() {
   if (employees.isError) return <ErrorState onRetry={() => void employees.refetch()} />;
   
   const submitCreate = (data: any) => {
-    create.mutate({ data }, { onSuccess: () => { setShowAdd(false); void queryClient.invalidateQueries({ queryKey: getListEmployeesQueryKey() }); } });
+    create.mutate({ data }, { onSuccess: (employee) => {
+      setShowAdd(false);
+      if (employee.bindingToken) setIssuedToken({ name: employee.name, token: employee.bindingToken });
+      void queryClient.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
+    } });
   };
 
   const submitEdit = (data: any) => {
@@ -74,6 +79,16 @@ export function Team() {
       ) : null}
       
       {showAdd && <EmployeeDialog pending={create.isPending} onClose={() => setShowAdd(false)} onSubmit={submitCreate} />}
+      {issuedToken && (
+        <div className="modal-scrim">
+          <div className="modal panel small-modal">
+            <div className="modal-head"><div><span className="eyebrow">One-time handoff</span><h3>Onboard {issuedToken.name}</h3></div><button className="icon-button" onClick={() => setIssuedToken(null)}><X size={17} /></button></div>
+            <p className="muted-copy">Send this code to the cleaner through your approved private channel. It will expire in 7 days and is shown only now.</p>
+            <code style={{ display: 'block', padding: '12px', wordBreak: 'break-all', background: 'hsl(var(--secondary))', borderRadius: '8px', fontSize: '11px' }}>{issuedToken.token}</code>
+            <div className="modal-actions"><button className="button button-primary" onClick={() => setIssuedToken(null)}>I’ve saved the code</button></div>
+          </div>
+        </div>
+      )}
       {editEmployee && (
         <EmployeeDialog 
           pending={update.isPending} 
@@ -104,7 +119,8 @@ function EmployeeDialog({ onClose, onSubmit, pending, initialData }: { onClose: 
         </div>
         <div className="form-stack">
           <label>Full name<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="input-team-name" /></label>
-          <label>Clerk User ID (for auth linkage)<input value={form.clerkUserId} onChange={(e) => setForm({ ...form, clerkUserId: e.target.value })} placeholder="user_2X..." /></label>
+           {form.role !== 'cleaner' && <label>Clerk User ID (for auth linkage)<input required value={form.clerkUserId} onChange={(e) => setForm({ ...form, clerkUserId: e.target.value })} placeholder="user_2X..." /></label>}
+           {form.role === 'cleaner' && !initialData && <p className="muted-copy">The cleaner will securely link their own Clerk account with a one-time code after you save this profile.</p>}
           <label>System Role
             <select required value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as EmployeeInputRole })}>
               <option value="owner">Owner</option>

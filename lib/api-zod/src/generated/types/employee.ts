@@ -14,4 +14,6 @@ export interface Employee {
   role: EmployeeRole;
   /** @nullable */
   phone?: string | null;
+  /** @nullable */
+  bindingToken?: string | null;
 }

@@ -11,7 +11,8 @@ import {
   getGetJobQueryKey,
   useGetActiveTimeEntries,
   useListProofPhotos,
-  useCompleteAssignedJob
+  useCompleteAssignedJob,
+  useListJobMessages, useSendFieldJobMessage, getListJobMessagesQueryKey
 } from '@workspace/api-client-react';
 import type { Job, JobAssignment } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -84,6 +85,8 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
   const respond = useRespondToAssignment();
   const reportIncident = useCreateIncident();
   const completeJob = useCompleteAssignedJob();
+  const messages = useListJobMessages(jobId, { query: { enabled: !!jobId, queryKey: getListJobMessagesQueryKey(jobId), refetchInterval: 15_000 } });
+  const sendMessage = useSendFieldJobMessage();
   
   const photos = useListProofPhotos(jobId, { query: { enabled: !!jobId, queryKey: ['proofPhotos', jobId] } });
 
@@ -92,6 +95,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
   const [incidentSeverity, setIncidentSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
   const [showCorrection, setShowCorrection] = useState(false);
   const [correctionMins, setCorrectionMins] = useState(0);
+  const [message, setMessage] = useState('');
 
   if (isLoading) return <LoadingState label="Loading job details" />;
   if (isError || !job) return <ErrorState onRetry={() => void refetch()} />;
@@ -286,6 +290,34 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
           ) : (
             <div className="proof-empty"><ImageIcon size={17} /><span>Take photos before and after service.</span></div>
           )}
+        </div>
+
+        <div className="detail-section">
+          <div className="detail-section-head">
+            <div><span className="eyebrow">Team thread</span><h3>Internal job chat</h3></div>
+          </div>
+          {messages.data?.length ? (
+            <div style={{ display: 'grid', gap: '8px', marginBottom: '10px' }}>
+              {messages.data.filter((item) => item.audience === 'employee').map((item) => (
+                <div key={item.id} style={{ padding: '8px', borderRadius: '7px', background: 'hsl(var(--secondary))', fontSize: '11px' }}>
+                  <div>{item.body}</div>
+                  <small className="muted-copy">{formatTime(item.createdAt.split('T')[1] || item.createdAt)} · Internal</small>
+                </div>
+              ))}
+            </div>
+          ) : <p className="muted-copy">No internal messages yet.</p>}
+          <div className="message-input">
+            <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Message the operations desk" />
+            <button
+              disabled={!message.trim() || sendMessage.isPending}
+              onClick={() => sendMessage.mutate({ jobId, data: { body: message.trim(), audience: 'employee', recipient: 'operations' } }, {
+                onSuccess: () => {
+                  setMessage('');
+                  void qc.invalidateQueries({ queryKey: getListJobMessagesQueryKey(jobId) });
+                },
+              })}
+            ><Check size={15} /></button>
+          </div>
         </div>
 
         <div className="detail-section" style={{ padding: '16px', background: 'hsl(var(--secondary))', borderRadius: '8px', marginBottom: '24px' }}>

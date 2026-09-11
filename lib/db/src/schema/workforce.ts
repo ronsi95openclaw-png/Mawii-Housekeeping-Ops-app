@@ -12,6 +12,16 @@ export const employeesTable = pgTable("employees", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const employeeBindingTokensTable = pgTable("employee_binding_tokens", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const employeeJobNotesTable = pgTable("employee_job_notes", {
   id: serial("id").primaryKey(),
   jobId: integer("job_id").notNull(),
@@ -54,11 +64,13 @@ export const workerRatesTable = pgTable("worker_rates", {
 });
 
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({ id: true, createdAt: true });
+export const insertEmployeeBindingTokenSchema = createInsertSchema(employeeBindingTokensTable).omit({ id: true, createdAt: true });
 export const insertAssignmentSchema = createInsertSchema(jobAssignmentsTable).omit({ id: true, createdAt: true });
 export const insertTimeEntrySchema = createInsertSchema(timeEntriesTable).omit({ id: true, createdAt: true });
 export const insertWorkerRateSchema = createInsertSchema(workerRatesTable).omit({ id: true, createdAt: true });
 export type Employee = typeof employeesTable.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
+export type EmployeeBindingToken = typeof employeeBindingTokensTable.$inferSelect;
 export type JobAssignment = typeof jobAssignmentsTable.$inferSelect;
 export type TimeEntry = typeof timeEntriesTable.$inferSelect;
 export type WorkerRate = typeof workerRatesTable.$inferSelect;

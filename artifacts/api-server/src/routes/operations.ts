@@ -1,8 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { normalizeMessageIntent } from "../lib/messages";
-import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import {
   db,
   jobImportEventsTable,
@@ -12,6 +12,10 @@ import {
   teamMembersTable,
   employeesTable,
   jobAssignmentsTable,
+  remindersTable,
+  incidentsTable,
+  timeEntriesTable,
+  notificationsTable,
   type Job,
   type TeamMember,
 } from "@workspace/db";
@@ -28,6 +32,7 @@ import {
   UpdateJobParams,
 } from "@workspace/api-zod";
 import { canCleanerAccessJob } from "../lib/job-access";
+import { employeeForClerkUser, notifyAssignedCleaners, notifyEmployees } from "../lib/notifications";
 
 const router: IRouter = Router();
 router.use((req, res, next) => {
@@ -275,6 +280,11 @@ async function mapJob(job: Job) {
     externalId: job.externalId,
     team: allMembers.filter((member) => job.teamMemberIds.includes(member.id)).map(mapMember),
     assignedEmployees,
+    assignments: assignments.map((assignment) => ({
+      id: assignment.id,
+      employeeId: assignment.employeeId,
+      status: assignment.status,
+    })),
     checklist: (job.checklist ?? []) as ChecklistItem[],
     photos: (job.photos ?? []) as Photo[],
     createdAt: job.createdAt.toISOString(),
@@ -306,6 +316,10 @@ function timeParts(value: Date) {
   return { date: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` };
 }
 
+function hashBindingToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
 router.get("/dashboard/summary", async (_req, res) => {
   await ensureSeedData();
   const jobs = uniqueJobs(await db.select().from(jobsTable).orderBy(asc(jobsTable.scheduledDate), asc(jobsTable.startTime)));
@@ -313,13 +327,65 @@ router.get("/dashboard/summary", async (_req, res) => {
   const weekStart = dateOffset(-new Date().getDay());
   const upcoming = jobs.filter((job) => job.scheduledDate >= today && job.status !== "completed");
   const next = upcoming[0] ? await mapJob(upcoming[0]) : null;
+  const todayRows = await Promise.all(jobs.filter((job) => job.scheduledDate === today).map(async (job) => {
+    const mapped = await mapJob(job);
+    const [incidents, corrections, notifications] = await Promise.all([
+      db.select({ id: incidentsTable.id }).from(incidentsTable).where(and(eq(incidentsTable.jobId, job.id), inArray(incidentsTable.status, ["open", "in_review", "reclean"]))),
+      db.select({ id: timeEntriesTable.id }).from(timeEntriesTable).where(and(eq(timeEntriesTable.jobId, job.id), eq(timeEntriesTable.correctionStatus, "pending"))),
+      db.select({ id: notificationsTable.id }).from(notificationsTable).where(eq(notificationsTable.jobId, job.id)),
+    ]);
+    return {
+      ...mapped,
+      pendingIncidents: incidents.length,
+      pendingCorrections: corrections.length,
+      notificationCount: notifications.length,
+    };
+  }));
+  const ownerEmployees = await db
+    .select({ id: employeesTable.id })
+    .from(employeesTable)
+    .where(inArray(employeesTable.role, ["owner", "manager"]));
+  const unreadNotifications = ownerEmployees.length
+    ? await db
+      .select({ id: notificationsTable.id })
+      .from(notificationsTable)
+      .where(and(inArray(notificationsTable.employeeId, ownerEmployees.map(({ id }) => id)), isNull(notificationsTable.readAt)))
+    : [];
   res.json({
     todayJobs: jobs.filter((job) => job.scheduledDate === today).length,
     openJobs: jobs.filter((job) => job.status !== "completed").length,
     completedThisWeek: jobs.filter((job) => job.status === "completed" && job.scheduledDate >= weekStart && job.scheduledDate <= today).length,
     attentionNeeded: jobs.filter((job) => job.status === "attention").length,
+    operations: todayRows,
+    pendingIncidents: todayRows.reduce((sum, row) => sum + row.pendingIncidents, 0),
+    pendingCorrections: todayRows.reduce((sum, row) => sum + row.pendingCorrections, 0),
+    unreadNotifications: unreadNotifications.length,
+    ownerCount: ownerEmployees.length,
     nextJob: next,
   });
+});
+
+router.post("/dashboard/daily-summary", requireRole("owner", "manager"), async (req, res): Promise<void> => {
+  const jobs = uniqueJobs(await db.select().from(jobsTable).orderBy(asc(jobsTable.scheduledDate), asc(jobsTable.startTime)));
+  const today = dateOffset(0);
+  const todayJobs = jobs.filter((job) => job.scheduledDate === today);
+  const openToday = todayJobs.filter((job) => job.status !== "completed").length;
+  const attentionToday = todayJobs.filter((job) => job.status === "attention").length;
+  const summary = `${todayJobs.length} job(s) today · ${openToday} open · ${attentionToday} need attention`;
+  const owners = await db.select({ id: employeesTable.id }).from(employeesTable).where(inArray(employeesTable.role, ["owner", "manager"]));
+  await notifyEmployees(owners.map(({ id: employeeId }) => ({
+    employeeId,
+    kind: "daily_summary",
+    title: "Daily operations summary",
+    body: summary,
+  })));
+  await db.insert(activityEventsTable).values({
+    actorClerkUserId: req.authContext?.clerkUserId,
+    type: "summary",
+    title: "Daily operations summary triggered",
+    detail: summary,
+  });
+  res.status(201).json({ summaryDate: today, notifiedCount: owners.length, summary });
 });
 
 router.get("/activity", async (_req, res) => {
@@ -420,6 +486,13 @@ router.post("/jobs", requireRole("owner", "manager"), async (req, res) => {
     await db.insert(jobAssignmentsTable).values(
       employeeIds.map((employeeId) => ({ jobId: job.id, employeeId, status: "assigned" })),
     );
+    await notifyEmployees(employeeIds.map((employeeId) => ({
+      employeeId,
+      jobId: job.id,
+      kind: "assignment",
+      title: "New job assignment",
+      body: `${job.clientName} is scheduled for ${job.scheduledDate} at ${job.startTime}. Accept the assignment to begin field work.`,
+    })));
   }
   await db.insert(activityEventsTable).values({
     type: "job",
@@ -482,6 +555,13 @@ router.patch("/jobs/:id", requireRole("owner", "manager"), async (req, res) => {
         }
       } else {
         await db.insert(jobAssignmentsTable).values({ jobId: job.id, employeeId, status: "assigned" });
+        await notifyEmployees([{
+          employeeId,
+          jobId: job.id,
+          kind: "assignment",
+          title: "New job assignment",
+          body: `${job.clientName} is scheduled for ${job.scheduledDate} at ${job.startTime}. Accept the assignment to begin field work.`,
+        }]);
       }
     }
   }
@@ -512,8 +592,55 @@ router.post("/jobs/:jobId/assignments", requireRole("owner", "manager"), async (
     return;
   }
   const [assignment] = await db.insert(jobAssignmentsTable).values({ jobId, employeeId, status: "assigned" }).returning();
+  await notifyEmployees([{
+    employeeId,
+    jobId,
+    kind: "assignment",
+    title: "New job assignment",
+    body: `${job.clientName} is scheduled for ${job.scheduledDate} at ${job.startTime}. Accept the assignment to begin field work.`,
+  }]);
   await db.insert(activityEventsTable).values({ type: "assignment", title: "Employee assigned", detail: `${employee.name} assigned to ${job.clientName}`, jobId });
   res.status(201).json(assignment);
+});
+
+router.post("/jobs/:jobId/reminders", requireRole("owner", "manager"), async (req, res): Promise<void> => {
+  const jobId = Number(req.params.jobId);
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+  if (!Number.isInteger(jobId) || !title || !body) {
+    res.status(400).json({ error: "title and body are required" });
+    return;
+  }
+  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+  const actor = await employeeForClerkUser(req.authContext!.clerkUserId);
+  const [reminder] = await db.insert(remindersTable).values({
+    jobId,
+    createdByEmployeeId: actor?.id ?? null,
+    title,
+    body,
+  }).returning();
+  await notifyAssignedCleaners(jobId, { kind: "reminder", title, body });
+  await db.insert(activityEventsTable).values({
+    actorClerkUserId: req.authContext?.clerkUserId,
+    type: "reminder",
+    title: "Internal reminder sent",
+    detail: `${title} · ${body}`,
+    jobId,
+  });
+  res.status(201).json(reminder);
+});
+
+router.get("/jobs/:jobId/reminders", async (req, res): Promise<void> => {
+  const jobId = Number(req.params.jobId);
+  if (!(await canCleanerAccessJob(req, jobId))) {
+    res.status(403).json({ error: "Job is not assigned to this cleaner" });
+    return;
+  }
+  res.json(await db.select().from(remindersTable).where(eq(remindersTable.jobId, jobId)).orderBy(desc(remindersTable.createdAt)));
 });
 
 router.patch("/jobs/:id/checklist", requireRole("owner", "manager", "cleaner"), async (req, res) => {

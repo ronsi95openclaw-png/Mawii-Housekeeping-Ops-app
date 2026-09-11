@@ -53,6 +53,15 @@ export interface Employee {
   role: EmployeeRole;
   /** @nullable */
   phone?: string | null;
+  /** @nullable */
+  bindingToken?: string | null;
+}
+
+export interface JobAssignment {
+  id: number;
+  jobId: number;
+  employeeId: number;
+  status: string;
 }
 
 export interface ChecklistItem {
@@ -90,6 +99,7 @@ export interface Job {
   accessInstructions?: string | null;
   team: TeamMember[];
   assignedEmployees?: Employee[];
+  assignments?: JobAssignment[];
   checklist: ChecklistItem[];
   photos?: Photo[];
   /** @nullable */
@@ -97,12 +107,28 @@ export interface Job {
   createdAt?: string;
 }
 
+export type DashboardSummaryOperationsItem = Job & {
+  pendingIncidents: number;
+  pendingCorrections: number;
+  notificationCount: number;
+};
+
 export interface DashboardSummary {
   todayJobs: number;
   openJobs: number;
   completedThisWeek: number;
   attentionNeeded: number;
+  pendingIncidents: number;
+  pendingCorrections: number;
+  unreadNotifications: number;
+  operations: DashboardSummaryOperationsItem[];
   nextJob: Job | null;
+}
+
+export interface DailySummaryResult {
+  summaryDate: string;
+  notifiedCount: number;
+  summary: string;
 }
 
 export type ActivityType = typeof ActivityType[keyof typeof ActivityType];
@@ -523,6 +549,11 @@ export interface EmployeeInput {
   active?: string;
 }
 
+export interface EmployeeClaimInput {
+  /** @minLength 1 */
+  token: string;
+}
+
 export type EmployeeUpdateRole = typeof EmployeeUpdateRole[keyof typeof EmployeeUpdateRole];
 
 
@@ -538,13 +569,6 @@ export interface EmployeeUpdate {
   role?: EmployeeUpdateRole;
   phone?: string;
   active?: string;
-}
-
-export interface JobAssignment {
-  id: number;
-  jobId: number;
-  employeeId: number;
-  status: string;
 }
 
 export interface JobAssignmentInput {
@@ -734,6 +758,7 @@ export type MessageRecordChannel = typeof MessageRecordChannel[keyof typeof Mess
 
 
 export const MessageRecordChannel = {
+  internal: 'internal',
   sms: 'sms',
   whatsapp: 'whatsapp',
 } as const;
@@ -773,6 +798,50 @@ export interface MessageRecord {
   metadata?: MessageRecordMetadata;
   /** @nullable */
   actorClerkUserId?: string | null;
+  createdAt: string;
+}
+
+export type FieldMessageInputAudience = typeof FieldMessageInputAudience[keyof typeof FieldMessageInputAudience];
+
+
+export const FieldMessageInputAudience = {
+  employee: 'employee',
+} as const;
+
+export interface FieldMessageInput {
+  /** @minLength 1 */
+  body: string;
+  recipient?: string;
+  audience?: FieldMessageInputAudience;
+}
+
+export interface Reminder {
+  id: number;
+  jobId: number;
+  /** @nullable */
+  createdByEmployeeId?: number | null;
+  title: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface ReminderInput {
+  /** @minLength 1 */
+  title: string;
+  /** @minLength 1 */
+  body: string;
+}
+
+export interface Notification {
+  id: number;
+  employeeId: number;
+  /** @nullable */
+  jobId?: number | null;
+  kind: string;
+  title: string;
+  body: string;
+  /** @nullable */
+  readAt: string | null;
   createdAt: string;
 }
 
@@ -893,6 +962,14 @@ status?: string;
 export type ListPayoutsParams = {
 start: string;
 end: string;
+};
+
+export type ListNotificationsParams = {
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
 };
 
 export type ListPayPeriods200Item = { [key: string]: unknown };

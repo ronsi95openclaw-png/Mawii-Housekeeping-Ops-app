@@ -7,6 +7,7 @@
  */
 import type { ChecklistItem } from './checklistItem';
 import type { Employee } from './employee';
+import type { JobAssignment } from './jobAssignment';
 import type { JobStatus } from './jobStatus';
 import type { Photo } from './photo';
 import type { TeamMember } from './teamMember';
@@ -33,6 +34,7 @@ export interface Job {
   accessInstructions?: string | null;
   team: TeamMember[];
   assignedEmployees?: Employee[];
+  assignments?: JobAssignment[];
   checklist: ChecklistItem[];
   photos?: Photo[];
   /** @nullable */
