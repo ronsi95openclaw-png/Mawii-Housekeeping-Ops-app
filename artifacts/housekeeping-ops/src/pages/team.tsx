@@ -5,11 +5,15 @@ import {
   getListEmployeesQueryKey, useListTeam
 } from '@workspace/api-client-react';
 import type { Employee, EmployeeInputRole } from '@workspace/api-client-react';
-import { Plus, X, Phone, Edit2, ShieldAlert } from 'lucide-react';
+import { Plus, X, Phone, Edit2, ShieldAlert, RotateCcw } from 'lucide-react';
 import { LoadingState, ErrorState, EmptyState, PageIntro, Avatar, Badge } from '@/lib/shared';
 
+// The Team page is the only place a revoked person can be restored, so it asks for them.
+// Job assignment pickers call useListEmployees() without params and stay active-only.
+const TEAM_LIST_PARAMS = { includeInactive: 'true' } as const;
+
 export function Team() {
-  const employees = useListEmployees();
+  const employees = useListEmployees(TEAM_LIST_PARAMS, { query: { queryKey: getListEmployeesQueryKey(TEAM_LIST_PARAMS) } });
   const create = useCreateEmployee();
   const update = useUpdateEmployee();
   const queryClient = useQueryClient();
@@ -26,13 +30,13 @@ export function Team() {
     create.mutate({ data }, { onSuccess: (employee) => {
       setShowAdd(false);
       if (employee.bindingToken) setIssuedToken({ name: employee.name, token: employee.bindingToken });
-      void queryClient.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: ['listEmployees'] });
     } });
   };
 
   const submitEdit = (data: any) => {
     if (!editEmployee) return;
-    update.mutate({ id: editEmployee.id, data }, { onSuccess: () => { setEditEmployee(null); void queryClient.invalidateQueries({ queryKey: getListEmployeesQueryKey() }); } });
+    update.mutate({ id: editEmployee.id, data }, { onSuccess: () => { setEditEmployee(null); void queryClient.invalidateQueries({ queryKey: ['listEmployees'] }); } });
   };
   
   return (
@@ -42,17 +46,21 @@ export function Team() {
       {employees.data?.length ? (
         <div className="team-grid">
           {employees.data.map((emp) => (
-            <article className="panel team-card" key={emp.id} data-testid={`team-card-${emp.id}`}>
+            <article className={`panel team-card ${emp.active === 'false' ? 'team-card-revoked' : ''}`} key={emp.id} data-testid={`team-card-${emp.id}`}>
               <div className="team-card-head">
                 <Avatar member={{ name: emp.name }} size="lg" />
-                <Badge tone={emp.role === 'owner' ? 'red' : emp.role === 'manager' ? 'orange' : 'green'}>{emp.role}</Badge>
+                <Badge tone={emp.active === 'false' ? 'neutral' : emp.role === 'owner' ? 'red' : emp.role === 'manager' ? 'orange' : 'green'}>{emp.active === 'false' ? 'No access' : emp.role}</Badge>
               </div>
               <h3>{emp.name}</h3>
-              <span className="team-role">{emp.clerkUserId.startsWith('pending-') ? 'Waiting to sign in' : 'Account active'}</span>
+              <span className="team-role">{emp.active === 'false' ? `Access revoked · was ${emp.role}` : emp.clerkUserId.startsWith('pending-') ? 'Waiting to sign in' : 'Account active'}</span>
               <div className="team-contact">
                 <span><Phone size={14} />{emp.phone || 'No phone'}</span>
                 <div className="team-actions">
-                  <button className="button button-secondary" onClick={() => setEditEmployee(emp)}><Edit2 size={14} />Edit</button>
+                  {emp.active === 'false' ? (
+                    <button className="button button-primary" onClick={() => update.mutate({ id: emp.id, data: { active: 'true' } }, { onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['listEmployees'] }) })} data-testid={`button-restore-${emp.id}`}><RotateCcw size={14} />Restore access</button>
+                  ) : (
+                    <button className="button button-secondary" onClick={() => setEditEmployee(emp)}><Edit2 size={14} />Edit</button>
+                  )}
                   {emp.phone && <a href={`tel:${emp.phone}`} className="button button-secondary"><Phone size={14} />Call</a>}
                 </div>
               </div>
@@ -107,7 +115,7 @@ function EmployeeDialog({ onClose, onSubmit, pending, initialData }: { onClose: 
     clerkUserId: initialData?.clerkUserId || '',
     role: initialData?.role || 'cleaner',
     phone: initialData?.phone || '',
-    active: 'true'
+    active: initialData?.active || 'true'
   });
   
   return (
