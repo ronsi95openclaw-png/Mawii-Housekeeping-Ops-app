@@ -1,0 +1,19 @@
+{
+  "name": "Mawii Operations Desk",
+  "short_name": "Mawii",
+  "description": "Jobs, schedule and field operations for Mawii Property Care.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f1ec",
+  "theme_color": "#17262a",
+  "icons": [
+    {
+      "src": "/mawii-logo.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

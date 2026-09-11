@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, useSearch } from 'wouter';
 import { 
   useListJobs, useCreateJob, useGetJob, useUpdateJob, useUpdateJobChecklist, 
   useSendJobMessage, useListEmployees, useListJobMessages, useListCustomers, useListCustomerAddresses,
@@ -34,7 +34,8 @@ type NewJobForm = {
 };
 
 export function Jobs() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
+  const search = useSearch();
   const jobs = useListJobs();
   const elevate = useGetElevateImportStatus({ query: { queryKey: getGetElevateImportStatusQueryKey(), refetchInterval: 30_000 } });
   const create = useCreateJob();
@@ -46,21 +47,22 @@ export function Jobs() {
     (notifications.data || []).filter((item) => item.kind === 'message' && !item.readAt && item.jobId).map((item) => item.jobId),
   );
 
-  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState(() => new URLSearchParams(window.location.search).get('filter') || 'all');
 
-  const params = new URLSearchParams(location.split('?')[1] || '');
+  // wouter's location is the pathname only — the query string lives in useSearch().
+  const params = new URLSearchParams(search);
   const selectedId = Number(params.get('job')) || null;
   const requestedNew = params.get('new') === '1';
   const requestedDate = params.get('date') || undefined;
   const [asOverlay, setAsOverlay] = useState(() => window.matchMedia('(max-width: 1050px)').matches);
 
   useEffect(() => {
-    const query = window.matchMedia('(max-width: 1050px)');
+    const mediaQuery = window.matchMedia('(max-width: 1050px)');
     const sync = (event: MediaQueryListEvent) => setAsOverlay(event.matches);
-    query.addEventListener('change', sync);
-    return () => query.removeEventListener('change', sync);
+    mediaQuery.addEventListener('change', sync);
+    return () => mediaQuery.removeEventListener('change', sync);
   }, []);
 
   useEffect(() => {
@@ -85,7 +87,7 @@ export function Jobs() {
   if (jobs.isLoading) return <LoadingState label="Loading jobs" />;
   if (jobs.isError) return <ErrorState onRetry={() => void jobs.refetch()} />;
   
-  const filtered = (jobs.data || []).filter((job) => (filter === 'all' || job.status === filter) && `${job.clientName} ${job.address} ${job.serviceType}`.toLowerCase().includes(search.toLowerCase()));
+  const filtered = (jobs.data || []).filter((job) => (filter === 'all' || job.status === filter) && `${job.clientName} ${job.address} ${job.serviceType}`.toLowerCase().includes(query.toLowerCase()));
   const selectedJob = selectedId ? (jobs.data || []).find((j) => j.id === selectedId) : null;
   
   const submitCreate = (data: NewJobForm) => {
@@ -124,7 +126,7 @@ export function Jobs() {
       <section className="panel jobs-toolbar">
         <div className="search-wrap">
           <Search size={17} />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search client, address, or service" data-testid="input-search-jobs" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search client, address, or service" data-testid="input-search-jobs" />
         </div>
         <div className="filter-tabs">
           {['all', 'scheduled', 'in_progress', 'attention', 'completed'].map((value) => (
@@ -177,7 +179,7 @@ export function Jobs() {
           )}
         </div>
       ) : (
-        <EmptyState title="No jobs match that view" body="Try clearing the search or changing the status filter." action={<button className="button button-secondary" onClick={() => { setSearch(''); setFilter('all'); }} data-testid="button-clear-job-filters">Clear filters</button>} />
+        <EmptyState title="No jobs match that view" body="Try clearing the search or changing the status filter." action={<button className="button button-secondary" onClick={() => { setQuery(''); setFilter('all'); }} data-testid="button-clear-job-filters">Clear filters</button>} />
       )}
       
       {showCreate && <CreateJobDialog pending={create.isPending} initialDate={requestedDate} onClose={closeCreate} onSubmit={submitCreate} />}
