@@ -18,7 +18,7 @@ import {
 import type { Job, JobAssignment } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { MapPin, Clock3, Check, Camera, Coffee, AlertTriangle, ChevronRight, X, Image as ImageIcon, Map as MapIcon } from 'lucide-react';
-import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, formatDate, formatTime, statusTone, statusLabel } from '@/lib/shared';
+import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, formatDate, formatTime, statusTone, statusLabel, AddressLink } from '@/lib/shared';
 
 function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignment; onSelect: (jobId: number, assignmentId: number) => void; unread: boolean }) {
   const { data: job, isLoading } = useGetJob(assignment.jobId, { query: { queryKey: getGetJobQueryKey(assignment.jobId) } });
@@ -203,17 +203,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
         <div className="detail-top">
           <div>
             <h2>{job.clientName}</h2>
-            <p>
-              <MapPin size={14} />{job.address}
-            </p>
-            <a 
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.address)}`} 
-              target="_blank" 
-              rel="noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: 'hsl(var(--primary))', marginTop: '4px', textDecoration: 'none' }}
-            >
-              <MapIcon size={12} /> Get Directions
-            </a>
+            <p><AddressLink address={job.address} /></p>
           </div>
           <Badge tone={statusTone(job.status)}>{statusLabel(job.status)}</Badge>
         </div>

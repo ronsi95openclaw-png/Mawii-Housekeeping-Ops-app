@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { LoaderCircle, AlertTriangle, Sparkles, X } from 'lucide-react';
+import { LoaderCircle, AlertTriangle, Sparkles, X, MapPin, Navigation } from 'lucide-react';
 
 export function formatDate(value?: string | Date, options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }) {
   if (!value) return '—';
@@ -99,6 +99,40 @@ export function DetailPane({ onClose, label, testId, children }: { onClose: () =
         <button className="icon-button detail-overlay-close" onClick={onClose} aria-label={label} data-testid={testId}><X size={17} /></button>
         {children}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Tapping an address should offer a choice of map app rather than guessing which one the
+ * crew has. There is no web-standard way to open the OS app picker, so both links are
+ * shown; each deep-links into its own app on a phone that has it installed.
+ */
+export function AddressLink({ address }: { address: string }) {
+  const [open, setOpen] = useState(false);
+  if (!address) return null;
+  const query = encodeURIComponent(address);
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', border: 0, background: 'transparent', padding: 0, color: 'inherit', font: 'inherit', cursor: 'pointer' }}
+        data-testid="button-open-address-menu"
+      >
+        <MapPin size={14} />{address}
+      </button>
+      {open && (
+        <div className="address-menu panel" onMouseLeave={() => setOpen(false)}>
+          <a href={`https://maps.apple.com/?q=${query}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)} data-testid="link-apple-maps">
+            <Navigation size={13} /> Apple Maps
+          </a>
+          <a href={`https://www.google.com/maps/search/?api=1&query=${query}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)} data-testid="link-google-maps">
+            <Navigation size={13} /> Google Maps
+          </a>
+        </div>
+      )}
     </div>
   );
 }

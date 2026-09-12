@@ -12,7 +12,7 @@ import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, ChevronRight, ClipboardCheck, MapPin, Check, MessageSquare, Phone, CheckCircle2, Send, X, ArrowRight, AlertTriangle, LoaderCircle, RefreshCw, Edit2 } from 'lucide-react';
 import { ADD_ON_OPTIONS, addOnTotals, money } from '@/lib/pricing';
-import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, todayISO, DetailPane } from '@/lib/shared';
+import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, todayISO, DetailPane, AddressLink } from '@/lib/shared';
 
 const SERVICE_OPTIONS = ['Standard cleaning', 'Deep cleaning', 'Move In/Out cleaning'];
 
@@ -427,16 +427,21 @@ function JobDetail({ job }: { job: Job }) {
   const [reminderTitle, setReminderTitle] = useState('');
   const [reminderBody, setReminderBody] = useState('');
   const [editing, setEditing] = useState(false);
+  const [patchError, setPatchError] = useState<string | null>(null);
 
   const current = detail.data || job;
-  
+
   const patch = (data: Parameters<typeof update.mutate>[0]['data']) => {
-    update.mutate({ id: job.id, data }, { 
-      onSuccess: (result) => { 
-        qc.setQueryData(getGetJobQueryKey(job.id), result); 
-        void qc.invalidateQueries({ queryKey: getListJobsQueryKey() }); 
-        void qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }); 
-      } 
+    setPatchError(null);
+    update.mutate({ id: job.id, data }, {
+      onSuccess: (result) => {
+        qc.setQueryData(getGetJobQueryKey(job.id), result);
+        void qc.invalidateQueries({ queryKey: getListJobsQueryKey() });
+        void qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      },
+      // The crew dropdown resets to its placeholder after every pick whether the save
+      // worked or not, so a silent failure looked identical to a successful assignment.
+      onError: () => setPatchError('That change did not save. Check your connection and try again.'),
     });
   };
   
@@ -455,7 +460,7 @@ function JobDetail({ job }: { job: Job }) {
         <div>
           <span className="eyebrow">Job #{String(current.id).padStart(4, '0')} · {formatDate(current.scheduledDate, { weekday: 'long', month: 'short', day: 'numeric' })}</span>
           <h2>{current.clientName}</h2>
-          <p><MapPin size={14} />{current.address}</p>
+          <p><AddressLink address={current.address} /></p>
         </div>
         <select value={current.status} onChange={(e) => patch({ status: e.target.value as 'scheduled' | 'in_progress' | 'completed' | 'attention' })} data-testid="select-job-status">
           <option value="scheduled">Scheduled</option>
@@ -526,6 +531,7 @@ function JobDetail({ job }: { job: Job }) {
          <label style={{ marginTop: '12px' }}>Assign someone
            <select
              value=""
+             disabled={update.isPending}
              onChange={(e) => {
                const employeeId = Number(e.target.value);
                if (!employeeId) return;
@@ -533,11 +539,12 @@ function JobDetail({ job }: { job: Job }) {
              }}
              data-testid="select-assign-employee"
            >
-             <option value="">Choose an employee…</option>
+             <option value="">{update.isPending ? 'Assigning…' : 'Choose an employee…'}</option>
              {(employees.data || [])
                .filter((employee) => !current.assignedEmployees?.some((assigned) => assigned.id === employee.id))
                .map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.role}</option>)}
            </select>
+           {patchError && <p className="form-error" data-testid="text-assign-error">{patchError}</p>}
          </label>
       </div>
       
