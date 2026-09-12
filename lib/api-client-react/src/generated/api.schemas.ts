@@ -58,11 +58,23 @@ export interface Employee {
   bindingToken?: string | null;
 }
 
+export type JobAssignmentJob = {
+  id: number;
+  clientName: string;
+  address: string;
+  serviceType: string;
+  scheduledDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+};
+
 export interface JobAssignment {
   id: number;
   jobId: number;
   employeeId: number;
   status: string;
+  job?: JobAssignmentJob;
 }
 
 export interface ChecklistItem {
@@ -192,6 +204,8 @@ export interface JobUpdate {
   startTime?: string;
   endTime?: string;
   status?: JobUpdateStatus;
+  /** @minLength 1 */
+  address?: string;
   notes?: string;
   serviceVariant?: string;
   addOns?: string[];
@@ -940,6 +954,13 @@ export const ListJobsStatus = {
   completed: 'completed',
   attention: 'attention',
 } as const;
+
+export type SyncElevateMailbox200 = {
+  scanned: number;
+  created: number;
+  alreadyImported: number;
+  problems: string[];
+};
 
 export type ListEmployeesParams = {
 /**

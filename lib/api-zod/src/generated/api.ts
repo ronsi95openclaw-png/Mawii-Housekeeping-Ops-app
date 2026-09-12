@@ -64,7 +64,17 @@ export const GetDashboardSummaryResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -120,7 +130,17 @@ export const GetDashboardSummaryResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -210,7 +230,17 @@ export const ListJobsResponseItem = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -291,7 +321,17 @@ export const CreateJobResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -352,7 +392,17 @@ export const GetJobResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -377,6 +427,7 @@ export const UpdateJobParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+
 export const updateJobBodyDurationMinutesMin = 0;
 
 
@@ -386,6 +437,7 @@ export const UpdateJobBody = zod.object({
   "startTime": zod.string().optional(),
   "endTime": zod.string().optional(),
   "status": zod.enum(['scheduled', 'in_progress', 'completed', 'attention']).optional(),
+  "address": zod.string().min(1).optional(),
   "notes": zod.string().optional(),
   "serviceVariant": zod.string().optional(),
   "addOns": zod.array(zod.string()).optional(),
@@ -431,7 +483,17 @@ export const UpdateJobResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -497,7 +559,17 @@ export const UpdateJobChecklistResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -527,7 +599,17 @@ export const AssignEmployeeToJobResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })
 
 
@@ -610,6 +692,17 @@ export const CreateTeamMemberResponse = zod.object({
 
 
 /**
+ * @summary Read the ElevateOS schedule emails and import any new appointments
+ */
+export const SyncElevateMailboxResponse = zod.object({
+  "scanned": zod.number().int(),
+  "created": zod.number().int(),
+  "alreadyImported": zod.number().int(),
+  "problems": zod.array(zod.string())
+})
+
+
+/**
  * @summary Receive an Elevate OS appointment webhook
  */
 export const ImportElevateJobHeader = zod.object({
@@ -680,7 +773,17 @@ export const ImportElevateJobResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),
@@ -1121,7 +1224,17 @@ export const ListAssignedJobsResponseItem = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })
 export const ListAssignedJobsResponse = zod.array(ListAssignedJobsResponseItem)
 
@@ -1135,7 +1248,17 @@ export const RespondToAssignmentResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })
 
 
@@ -1396,7 +1519,17 @@ export const CompleteAssignedJobResponse = zod.object({
   "id": zod.number().int(),
   "jobId": zod.number().int(),
   "employeeId": zod.number().int(),
+  "status": zod.string(),
+  "job": zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "address": zod.string(),
+  "serviceType": zod.string(),
+  "scheduledDate": zod.coerce.date(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
   "status": zod.string()
+}).optional()
 })).optional(),
   "checklist": zod.array(zod.object({
   "id": zod.number().int(),

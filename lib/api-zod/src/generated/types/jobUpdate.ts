@@ -12,6 +12,8 @@ export interface JobUpdate {
   startTime?: string;
   endTime?: string;
   status?: JobUpdateStatus;
+  /** @minLength 1 */
+  address?: string;
   notes?: string;
   serviceVariant?: string;
   addOns?: string[];

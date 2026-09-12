@@ -82,6 +82,7 @@ import type {
   ServicePlanInput,
   ServicePlanUpdate,
   SkipOccurrenceInput,
+  SyncElevateMailbox200,
   TeamMember,
   TeamMemberInput,
   TimeCorrectionInput,
@@ -1082,6 +1083,77 @@ export const useCreateTeamMember = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateTeamMemberMutationOptions(options));
+    }
+
+export const getSyncElevateMailboxUrl = () => {
+
+
+
+
+  return `/api/integrations/elevate/gmail-sync`
+}
+
+/**
+ * @summary Read the ElevateOS schedule emails and import any new appointments
+ */
+export const syncElevateMailbox = async ( options?: Parameters<typeof customFetch>[1]): Promise<SyncElevateMailbox200> => {
+
+  return customFetch<SyncElevateMailbox200>(getSyncElevateMailboxUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSyncElevateMailboxMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncElevateMailbox>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncElevateMailbox>>, TError,void, TContext> => {
+
+const mutationKey = ['syncElevateMailbox'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncElevateMailbox>>, void> = () => {
+
+
+          return  syncElevateMailbox(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncElevateMailboxMutationResult = NonNullable<Awaited<ReturnType<typeof syncElevateMailbox>>>
+
+    export type SyncElevateMailboxMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Read the ElevateOS schedule emails and import any new appointments
+ */
+export const useSyncElevateMailbox = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncElevateMailbox>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncElevateMailbox>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncElevateMailboxMutationOptions(options));
     }
 
 export const getImportElevateJobUrl = () => {

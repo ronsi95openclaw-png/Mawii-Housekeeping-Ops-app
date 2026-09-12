@@ -5,10 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { JobAssignmentJob } from './jobAssignmentJob';
 
 export interface JobAssignment {
   id: number;
   jobId: number;
   employeeId: number;
   status: string;
+  job?: JobAssignmentJob;
 }
