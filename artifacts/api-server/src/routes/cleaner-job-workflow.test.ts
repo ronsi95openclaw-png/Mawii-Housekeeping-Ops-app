@@ -178,11 +178,17 @@ describe("cleaner assigned-job workflow", () => {
           headers: { "x-dev-user-id": assignedCleanerUserId },
         }), 200) as {
           address: string;
+          clientName: string;
+          clientPhone: string | null;
           notes: string;
           accessInstructions?: string | null;
           checklist: Array<{ id: number; completed: boolean }>;
         };
         expect(assignedJob.address).toContain("700 Workflow Street");
+        // The crew needs the name and address to do the work, but customer contact stays
+        // with the desk — and hiding it in the interface alone would still send it here.
+        expect(assignedJob.clientName).toBeTruthy();
+        expect(assignedJob.clientPhone).toBeNull();
         expect(assignedJob.notes).toContain("client instructions");
         expect(assignedJob.accessInstructions).toBe("Use the side gate; lockbox code is in the work order.");
         expect(assignedJob.checklist.length).toBeGreaterThan(1);

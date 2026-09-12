@@ -250,6 +250,16 @@ function uniqueMembers(members: TeamMember[]) {
   });
 }
 
+/**
+ * The crew needs the client's name and address to do the work; they do not need a way to
+ * contact the client directly, and customer communication stays with the desk. Hiding the
+ * number in the interface alone would still ship it in the response.
+ */
+function forViewer<T extends { clientPhone: string | null }>(req: { authContext?: { role?: string } }, job: T): T {
+  const role = (req.authContext?.role ?? "").toLowerCase();
+  return role === "owner" || role === "manager" ? job : { ...job, clientPhone: null };
+}
+
 async function mapJob(job: Job) {
   const allMembers = uniqueMembers(await db
     .select()
@@ -444,10 +454,12 @@ router.get("/jobs", async (req, res) => {
       inArray(jobAssignmentsTable.status, ["assigned", "accepted"]),
     ));
     const assignedJobIds = new Set(assignments.map((assignment) => assignment.jobId));
-    res.json(await Promise.all(jobs.filter((job) => assignedJobIds.has(job.id)).map(mapJob)));
+    const assignedJobs = await Promise.all(jobs.filter((job) => assignedJobIds.has(job.id)).map(mapJob));
+    res.json(assignedJobs.map((job) => forViewer(req, job)));
     return;
   }
-  res.json(await Promise.all(jobs.map(mapJob)));
+  const allJobs = await Promise.all(jobs.map(mapJob));
+  res.json(allJobs.map((job) => forViewer(req, job)));
 });
 
 router.post("/jobs", requireRole("owner", "manager"), async (req, res) => {
@@ -515,7 +527,7 @@ router.get("/jobs/:id", async (req, res) => {
     res.status(403).json({ error: "Job is not assigned to this cleaner" });
     return;
   }
-  res.json(await mapJob(job));
+  res.json(forViewer(req, await mapJob(job)));
 });
 
 router.patch("/jobs/:id", requireRole("owner", "manager"), async (req, res) => {
@@ -679,7 +691,7 @@ router.patch("/jobs/:id/checklist", requireRole("owner", "manager", "cleaner"), 
     detail: `Checklist item ${body.data.itemId} updated`,
     jobId: params.data.id,
   });
-  res.json(await mapJob(job));
+  res.json(forViewer(req, await mapJob(job)));
 });
 
 router.post("/jobs/:id/messages", requireRole("owner", "manager"), async (req, res) => {
