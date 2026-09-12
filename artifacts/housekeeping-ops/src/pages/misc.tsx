@@ -6,7 +6,7 @@ import {
   useListPayPeriods, useCreatePayPeriod, useApprovePayPeriod, useMarkPayPeriodPaid, useAddPayoutAdjustment, useGetOwnerReport,
   getListPayPeriodsQueryKey, getListPayoutsQueryKey
 } from '@workspace/api-client-react';
-import { PageIntro, LoadingState, ErrorState, EmptyState, formatDate, statusTone, Badge, statusLabel, formatTime, todayISO } from '@/lib/shared';
+import { PageIntro, LoadingState, ErrorState, EmptyState, formatDate, statusTone, Badge, statusLabel, formatTime, todayISO, activityHref } from '@/lib/shared';
 import { AlertTriangle, Activity as ActivityIcon, ShieldCheck, Check, DollarSign, Download } from 'lucide-react';
 import { Link } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
@@ -299,10 +299,6 @@ export function Reports() {
   );
 }
 
-// The server has always sent jobId on activity events; the generated type only gains it
-// at the next codegen run, so it is read optionally to keep this working either way.
-const activityJobId = (item: unknown) => (item as { jobId?: number | null }).jobId ?? null;
-
 export function ActivityPage() {
   const activity = useListActivityHistory();
   
@@ -329,9 +325,9 @@ export function ActivityPage() {
                 </>
               );
               // An entry about a job opens it; one that belongs to no job stays inert.
-              const jobId = activityJobId(item);
-              return jobId ? (
-                <Link href={`/jobs?job=${jobId}`} className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>{body}</Link>
+              const href = activityHref(item);
+              return href ? (
+                <Link href={href} className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>{body}</Link>
               ) : (
                 <div className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>{body}</div>
               );

@@ -4,7 +4,7 @@ import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { CalendarDays, Zap, CheckCircle2, AlertTriangle, Clock3, MapPin, ArrowRight, Activity as ActivityIcon, BellRing } from 'lucide-react';
-import { LoadingState, ErrorState, PageIntro, EmptyState, Badge, statusTone, statusLabel, formatTime, formatDate, Avatar, jobCrew } from '@/lib/shared';
+import { LoadingState, ErrorState, PageIntro, EmptyState, Badge, statusTone, statusLabel, formatTime, formatDate, Avatar, jobCrew, activityHref } from '@/lib/shared';
 
 export function Dashboard() {
   const summary = useGetDashboardSummary();
@@ -104,8 +104,9 @@ export function Dashboard() {
               );
               // Entries about a job open it; a summary belongs to no job, so it stays inert
               // rather than pretending to be a link.
-              return item.jobId ? (
-                <Link href={`/jobs?job=${item.jobId}`} className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>{body}</Link>
+              const href = activityHref(item);
+              return href ? (
+                <Link href={href} className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>{body}</Link>
               ) : (
                 <div className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>{body}</div>
               );

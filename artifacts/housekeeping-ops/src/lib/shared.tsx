@@ -144,3 +144,14 @@ export function AddressLink({ address }: { address: string }) {
 export function jobCrew(job: { assignedEmployees?: Array<{ id: number; name: string }>; team?: Array<{ id: number; name: string }> }) {
   return job.assignedEmployees?.length ? job.assignedEmployees : job.team ?? [];
 }
+
+/**
+ * Where an activity entry leads. Most name a job; a daily summary describes the whole day,
+ * so it opens the schedule rather than being a row that ignores the tap.
+ */
+export function activityHref(item: { type?: string }): string | null {
+  const jobId = (item as { jobId?: number | null }).jobId ?? null;
+  if (jobId) return `/jobs?job=${jobId}`;
+  if (item.type === 'summary') return '/schedule';
+  return null;
+}
