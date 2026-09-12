@@ -15,6 +15,11 @@ const localViteOrigins = new Set([
   "http://127.0.0.1:5173",
 ]);
 
+// This server compiles at startup and does not hot-reload, so pulling without restarting
+// the workflow leaves the previous bundle answering. That has twice looked like a fix
+// failing rather than never running, so every failure reports when its code started.
+const SERVER_STARTED_AT = new Date(Date.now() - Math.round(process.uptime() * 1000)).toISOString();
+
 export function handleApiError(
   err: unknown,
   req: Request,
@@ -32,6 +37,7 @@ export function handleApiError(
 
   res.status(status).json({
     error: status === 500 ? "Internal server error" : "Request failed",
+    serverStartedAt: SERVER_STARTED_AT,
   });
 }
 

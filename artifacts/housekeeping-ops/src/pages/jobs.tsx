@@ -12,7 +12,7 @@ import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, ChevronRight, ClipboardCheck, MapPin, Check, MessageSquare, Phone, CheckCircle2, Send, X, ArrowRight, AlertTriangle, LoaderCircle, RefreshCw, Edit2 } from 'lucide-react';
 import { ADD_ON_OPTIONS, addOnTotals, money } from '@/lib/pricing';
-import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, todayISO, DetailPane, AddressLink } from '@/lib/shared';
+import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, Avatar, statusTone, statusLabel, formatDate, formatTime, todayISO, DetailPane, AddressLink, jobCrew } from '@/lib/shared';
 
 const SERVICE_OPTIONS = ['Standard cleaning', 'Deep cleaning', 'Move In/Out cleaning'];
 
@@ -112,7 +112,7 @@ export function Jobs() {
   if (jobs.isLoading) return <LoadingState label="Loading jobs" />;
   if (jobs.isError) return <ErrorState onRetry={() => void jobs.refetch()} />;
   
-  const matchesFilter = (job: Job) => filter === 'all' || (filter === 'unassigned' ? !job.team?.length : job.status === filter);
+  const matchesFilter = (job: Job) => filter === 'all' || (filter === 'unassigned' ? !jobCrew(job).length : job.status === filter);
   const filtered = (jobs.data || []).filter((job) => matchesFilter(job) && `${job.clientName} ${job.address} ${job.serviceType}`.toLowerCase().includes(query.toLowerCase()));
   const selectedJob = selectedId ? (jobs.data || []).find((j) => j.id === selectedId) : null;
   
@@ -186,7 +186,7 @@ export function Jobs() {
                   <small>{job.serviceType} · {formatDate(job.scheduledDate)} · {formatTime(job.startTime)}</small>
                 </div>
                 <div className="job-list-team">
-                  {job.team?.slice(0, 3).map((member) => <Avatar key={member.id} member={member} size="sm" />)}
+                  {jobCrew(job).slice(0, 3).map((member) => <Avatar key={member.id} member={member} size="sm" />)}
                 </div>
                 <ChevronRight size={16} className="row-chevron" />
               </button>
@@ -449,9 +449,13 @@ function JobDetail({ job }: { job: Job }) {
       // Carry the server's own status and message through: a generic "did not save" hid
       // the reason for three rounds of guessing.
       onError: (error) => {
-        const detail = error as { status?: number; data?: { error?: string } | null; message?: string };
+        const detail = error as { status?: number; data?: { error?: string; serverStartedAt?: string } | null; message?: string };
         const serverSays = detail?.data?.error ?? detail?.message ?? '';
-        setPatchError(`That change did not save. ${detail?.status ? `HTTP ${detail.status}` : 'No response'}${serverSays ? ` — ${serverSays}` : ''}`);
+        const startedAt = detail?.data?.serverStartedAt;
+        setPatchError(
+          `That change did not save. ${detail?.status ? `HTTP ${detail.status}` : 'No response'}${serverSays ? ` — ${serverSays}` : ''}`
+          + (startedAt ? ` (API started ${new Date(startedAt).toLocaleTimeString()})` : ''),
+        );
       },
     });
   };

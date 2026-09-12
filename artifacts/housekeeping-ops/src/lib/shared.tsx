@@ -136,3 +136,11 @@ export function AddressLink({ address }: { address: string }) {
     </div>
   );
 }
+
+/**
+ * Who is actually on a job. `assignedEmployees` is the real assignment record; `team` is
+ * the legacy team-member list that only older seeded jobs carry, so both are consulted.
+ */
+export function jobCrew(job: { assignedEmployees?: Array<{ id: number; name: string }>; team?: Array<{ id: number; name: string }> }) {
+  return job.assignedEmployees?.length ? job.assignedEmployees : job.team ?? [];
+}

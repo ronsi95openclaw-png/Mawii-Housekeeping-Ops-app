@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CreateJobDialog } from '@/pages/jobs';
 import { ChevronLeft, ChevronRight, X, Clock3, MapPin, UserRound, ArrowRight, Plus } from 'lucide-react';
 import { Link } from 'wouter';
-import { LoadingState, ErrorState, PageIntro, Badge, Avatar, formatDate, formatTime, statusTone, statusLabel, startOfWeek, todayISO } from '@/lib/shared';
+import { LoadingState, ErrorState, PageIntro, Badge, Avatar, formatDate, formatTime, statusTone, statusLabel, startOfWeek, todayISO, jobCrew } from '@/lib/shared';
 
 type ScheduleView = 'day' | 'week' | 'month';
 
@@ -113,7 +113,7 @@ export function Schedule() {
                     <span>{formatTime(job.startTime)}</span>
                     <strong>{job.clientName}</strong>
                     <small>{job.serviceType}</small>
-                    <div className="mini-crew">{job.team?.slice(0, 2).map((member) => <Avatar key={member.id} member={member} size="sm" />)}</div>
+                    <div className="mini-crew">{jobCrew(job).slice(0, 2).map((member) => <Avatar key={member.id} member={member} size="sm" />)}</div>
                   </button>
                 )) : <span className="day-empty">open</span>}
               </div>
@@ -172,7 +172,7 @@ function JobQuickView({ job, onClose }: { job: Job; onClose: () => void }) {
         <div className="drawer-facts">
           <span><Clock3 size={15} />{formatTime(job.startTime)} – {formatTime(job.endTime)}</span>
           <span><MapPin size={15} />{job.address}</span>
-          <span><UserRound size={15} />{job.team?.map((m) => m.name).join(', ') || 'Unassigned'}</span>
+          <span><UserRound size={15} />{jobCrew(job).map((m) => m.name).join(', ') || 'Unassigned'}</span>
         </div>
         <Link href={`/jobs?job=${job.id}`} onClick={onClose} className="button button-primary drawer-action" data-testid="link-open-job-detail">Open full job <ArrowRight size={15} /></Link>
       </aside>

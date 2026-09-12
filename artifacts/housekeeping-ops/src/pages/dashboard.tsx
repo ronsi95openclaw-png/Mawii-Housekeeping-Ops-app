@@ -4,7 +4,7 @@ import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { CalendarDays, Zap, CheckCircle2, AlertTriangle, Clock3, MapPin, ArrowRight, Activity as ActivityIcon, BellRing } from 'lucide-react';
-import { LoadingState, ErrorState, PageIntro, EmptyState, Badge, statusTone, statusLabel, formatTime, formatDate, Avatar } from '@/lib/shared';
+import { LoadingState, ErrorState, PageIntro, EmptyState, Badge, statusTone, statusLabel, formatTime, formatDate, Avatar, jobCrew } from '@/lib/shared';
 
 export function Dashboard() {
   const summary = useGetDashboardSummary();
@@ -119,8 +119,8 @@ function NextJob({ job }: { job: Job }) {
         <h4>{job.clientName}</h4>
         <p><MapPin size={14} />{job.address}</p>
         <div className="crew-stack">
-          {job.team?.slice(0, 3).map((member) => <Avatar key={member.id} member={member} size="sm" />)}
-          <span>{job.team?.length || 0} crew assigned</span>
+          {jobCrew(job).slice(0, 3).map((member) => <Avatar key={member.id} member={member} size="sm" />)}
+          <span>{jobCrew(job).length} crew assigned</span>
         </div>
       </div>
       <ArrowRight size={18} className="next-arrow" />
