@@ -930,6 +930,11 @@ components:
         status:
           type: string
           enum: [scheduled, in_progress, completed, attention]
+        # Correcting a job's own address, needed when an import lands an incomplete one
+        # and there is no customer record behind the job to fix instead.
+        address:
+          type: string
+          minLength: 1
         notes:
           type: string
         serviceVariant:

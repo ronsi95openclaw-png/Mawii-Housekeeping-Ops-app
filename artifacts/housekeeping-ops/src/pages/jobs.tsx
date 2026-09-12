@@ -219,6 +219,7 @@ function EditJobDialog({ job, onClose, onSubmit, pending, failed }: { job: Job; 
     scheduledDate: job.scheduledDate,
     startTime: job.startTime,
     endTime: job.endTime,
+    address: job.address,
     serviceType: job.serviceType,
     serviceVariant: job.serviceVariant || '',
     durationMinutes: job.durationMinutes ?? 180,
@@ -238,6 +239,10 @@ function EditJobDialog({ job, onClose, onSubmit, pending, failed }: { job: Job; 
           <button type="button" className="icon-button" onClick={onClose} data-testid="button-close-edit-job"><X size={17} /></button>
         </div>
         <div className="form-grid">
+          <label className="span-2">Service address
+            <input required value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Street, city, state, unit" data-testid="input-edit-address" />
+            <span className="muted-copy">Changes this job only — a customer's saved address is not affected.</span>
+          </label>
           <label>Date<input type="date" required value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} data-testid="input-edit-date" /></label>
           <label>Duration (minutes)<input type="number" min={30} step={30} value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: Number(e.target.value) })} data-testid="input-edit-duration" /></label>
           <label>Start<input type="time" required value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} data-testid="input-edit-start" /></label>
