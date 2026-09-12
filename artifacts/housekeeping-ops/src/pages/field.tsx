@@ -211,6 +211,9 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
         <div className="detail-stat-row">
           <div><span>Window</span><strong>{formatTime(job.startTime)} – {formatTime(job.endTime)}</strong></div>
           <div><span>Service</span><strong>{job.serviceType}</strong></div>
+          {/* Names only. The checklist tells the crew to complete the selected add-ons, so
+              they have to know which ones — what the client paid is not their business. */}
+          {job.addOns?.length ? <div><span>Add-ons</span><strong>{job.addOns.join(', ')}</strong></div> : null}
         </div>
 
         {job.notes && (
