@@ -446,7 +446,13 @@ function JobDetail({ job }: { job: Job }) {
       },
       // The crew dropdown resets to its placeholder after every pick whether the save
       // worked or not, so a silent failure looked identical to a successful assignment.
-      onError: () => setPatchError('That change did not save. Check your connection and try again.'),
+      // Carry the server's own status and message through: a generic "did not save" hid
+      // the reason for three rounds of guessing.
+      onError: (error) => {
+        const detail = error as { status?: number; data?: { error?: string } | null; message?: string };
+        const serverSays = detail?.data?.error ?? detail?.message ?? '';
+        setPatchError(`That change did not save. ${detail?.status ? `HTTP ${detail.status}` : 'No response'}${serverSays ? ` — ${serverSays}` : ''}`);
+      },
     });
   };
   
