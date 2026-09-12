@@ -530,11 +530,16 @@ router.patch("/jobs/:id", requireRole("owner", "manager"), async (req, res) => {
   const updateData = scheduledDate
     ? { ...rest, scheduledDate: scheduledDate.toISOString().slice(0, 10) }
     : rest;
-  const [job] = await db
-    .update(jobsTable)
-    .set(updateData)
-    .where(eq(jobsTable.id, params.data.id))
-    .returning();
+  // Assigning a crew sends employeeIds and nothing else, which leaves no column to write.
+  // Drizzle throws "No values to set" on an empty update, so the whole request failed and
+  // a crew could never be assigned from the job screen.
+  const [job] = Object.keys(updateData).length
+    ? await db
+        .update(jobsTable)
+        .set(updateData)
+        .where(eq(jobsTable.id, params.data.id))
+        .returning()
+    : await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;

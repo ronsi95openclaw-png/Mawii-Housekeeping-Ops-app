@@ -249,7 +249,11 @@
 .month-more { padding-left: 6px; color: hsl(var(--muted-foreground)); font-size: 9px; }
 @media (max-width: 800px) { .month-cell { min-height: 74px; padding: 4px; } .month-chip strong { font-size: 9px; } }
 /* While a dialog or drawer is open, the page behind it must not scroll away under the finger. */
-body:has(.modal-scrim, .drawer-scrim) { overflow: hidden; }
+/* The nav drawer has its own scrim class, so it needs naming here too — without it the
+   page behind the open menu scrolled away under the finger. */
+body:has(.modal-scrim, .drawer-scrim, .sidebar-scrim) { overflow: hidden; }
+/* A nav taller than the screen scrolls within the drawer rather than moving the page. */
+@media (max-width: 800px) { .sidebar-open { overflow-y: auto; overscroll-behavior: contain; } }
 .team-card-revoked { opacity: .62; border-style: dashed; }
 .address-menu { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; display: flex; flex-direction: column; min-width: 160px; padding: 6px; box-shadow: 0 12px 30px rgba(20,39,38,.18); }
 .address-menu a { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; color: hsl(var(--foreground)); text-decoration: none; font-size: 12px; }

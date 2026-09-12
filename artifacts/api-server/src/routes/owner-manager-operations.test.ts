@@ -294,6 +294,21 @@ describe("owner and manager operations", () => {
         expect(canonicalAssignment).toBeDefined();
         expect((await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, job.id))).length).toBe(1);
 
+        // The crew picker sends employeeIds and nothing else, which once left the update
+        // with no column to write and failed the entire request.
+        expectStatus(await request(baseUrl, `/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: ownerHeaders,
+          body: { employeeIds: [] },
+        }), 200);
+        expect((await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, job.id))).length).toBe(0);
+        expectStatus(await request(baseUrl, `/jobs/${job.id}`, {
+          method: "PATCH",
+          headers: ownerHeaders,
+          body: { employeeIds: [canonicalEmployee.id] },
+        }), 200);
+        expect((await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, job.id))).length).toBe(1);
+
         expectStatus(await request(baseUrl, `/jobs/999999/assignments`, {
           method: "POST",
           headers: ownerHeaders,
