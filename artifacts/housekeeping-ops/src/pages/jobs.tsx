@@ -186,7 +186,9 @@ export function Jobs() {
                   <small>{job.serviceType} · {formatDate(job.scheduledDate)} · {formatTime(job.startTime)}</small>
                 </div>
                 <div className="job-list-team">
-                  {jobCrew(job).slice(0, 3).map((member) => <Avatar key={member.id} member={member} size="sm" />)}
+                  {jobCrew(job).length
+                    ? jobCrew(job).slice(0, 3).map((member) => <Avatar key={member.id} member={member} size="sm" />)
+                    : <span className="needs-crew-pill" data-testid={`needs-crew-${job.id}`}>Needs crew</span>}
                 </div>
                 <ChevronRight size={16} className="row-chevron" />
               </button>

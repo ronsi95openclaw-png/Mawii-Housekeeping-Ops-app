@@ -255,6 +255,8 @@ body:has(.modal-scrim, .drawer-scrim, .sidebar-scrim) { overflow: hidden; }
 /* A nav taller than the screen scrolls within the drawer rather than moving the page. */
 @media (max-width: 800px) { .sidebar-open { overflow-y: auto; overscroll-behavior: contain; } }
 .team-card-revoked { opacity: .62; border-style: dashed; }
+/* A job with nobody on it needs to be visible at a glance, not an empty gap. */
+.needs-crew-pill { display: inline-flex; align-items: center; white-space: nowrap; padding: 3px 8px; border: 1px dashed hsl(var(--destructive)); border-radius: 999px; color: hsl(var(--destructive)); font-size: 9px; font-weight: 700; letter-spacing: .03em; }
 .address-menu { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; display: flex; flex-direction: column; min-width: 160px; padding: 6px; box-shadow: 0 12px 30px rgba(20,39,38,.18); }
 .address-menu a { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; color: hsl(var(--foreground)); text-decoration: none; font-size: 12px; }
 .address-menu a:hover, .address-menu a:focus-visible { background: hsl(var(--secondary)); }

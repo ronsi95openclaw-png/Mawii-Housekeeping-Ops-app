@@ -113,7 +113,11 @@ export function Schedule() {
                     <span>{formatTime(job.startTime)}</span>
                     <strong>{job.clientName}</strong>
                     <small>{job.serviceType}</small>
-                    <div className="mini-crew">{jobCrew(job).slice(0, 2).map((member) => <Avatar key={member.id} member={member} size="sm" />)}</div>
+                    <div className="mini-crew">
+                      {jobCrew(job).length
+                        ? jobCrew(job).slice(0, 2).map((member) => <Avatar key={member.id} member={member} size="sm" />)
+                        : <span className="needs-crew-pill">Needs crew</span>}
+                    </div>
                   </button>
                 )) : <span className="day-empty">open</span>}
               </div>
