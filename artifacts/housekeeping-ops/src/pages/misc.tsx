@@ -299,6 +299,10 @@ export function Reports() {
   );
 }
 
+// The server has always sent jobId on activity events; the generated type only gains it
+// at the next codegen run, so it is read optionally to keep this working either way.
+const activityJobId = (item: unknown) => (item as { jobId?: number | null }).jobId ?? null;
+
 export function ActivityPage() {
   const activity = useListActivityHistory();
   
@@ -313,16 +317,25 @@ export function ActivityPage() {
       <section className="panel activity-panel">
         {items.length ? (
           <div className="activity-list" style={{ marginTop: 0 }}>
-            {items.map((item) => (
-              <div className="activity-row" key={item.id}>
-                <span className="activity-icon"><ActivityIcon size={15} /></span>
-                <div className="activity-copy">
-                  <strong>{item.title}</strong>
-                  <span>{item.detail}</span>
-                </div>
-                <time>{formatDate(item.createdAt, { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' })}</time>
-              </div>
-            ))}
+            {items.map((item) => {
+              const body = (
+                <>
+                  <span className="activity-icon"><ActivityIcon size={15} /></span>
+                  <div className="activity-copy">
+                    <strong>{item.title}</strong>
+                    <span>{item.detail}</span>
+                  </div>
+                  <time>{formatDate(item.createdAt, { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' })}</time>
+                </>
+              );
+              // An entry about a job opens it; one that belongs to no job stays inert.
+              const jobId = activityJobId(item);
+              return jobId ? (
+                <Link href={`/jobs?job=${jobId}`} className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>{body}</Link>
+              ) : (
+                <div className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>{body}</div>
+              );
+            })}
           </div>
         ) : (
           <EmptyState title="No activity recorded" body="System events and updates will appear here." />

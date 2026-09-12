@@ -1496,6 +1496,9 @@ components:
         title: { type: string }
         detail: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
+        # The server has always sent this; declaring it lets the activity trail link to
+        # the job an entry is about instead of being a dead row.
+        jobId: { type: ["integer", "null"] }
     MessageRecord:
       type: object
       required: [id, recipient, body, channel, audience, status, provider, createdAt]

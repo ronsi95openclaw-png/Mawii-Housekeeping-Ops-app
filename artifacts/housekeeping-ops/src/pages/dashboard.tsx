@@ -94,13 +94,22 @@ export function Dashboard() {
         <div className="section-heading"><div><span className="eyebrow">The paper trail</span><h3>Recent activity</h3></div><Link href="/activity" className="text-link" data-testid="link-all-activity">All activity <ArrowRight size={14} /></Link></div>
         {activity.data?.length ? (
           <div className="activity-list">
-            {activity.data.slice(0, 6).map((item) => (
-              <div className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>
-                <span className={`activity-icon activity-${item.type}`}><ActivityIcon size={15} /></span>
-                <div className="activity-copy"><strong>{item.title}</strong><span>{item.detail}</span></div>
-                <time>{formatDate(item.createdAt, { hour: 'numeric', minute: '2-digit' })}</time>
-              </div>
-            ))}
+            {activity.data.slice(0, 6).map((item) => {
+              const body = (
+                <>
+                  <span className={`activity-icon activity-${item.type}`}><ActivityIcon size={15} /></span>
+                  <div className="activity-copy"><strong>{item.title}</strong><span>{item.detail}</span></div>
+                  <time>{formatDate(item.createdAt, { hour: 'numeric', minute: '2-digit' })}</time>
+                </>
+              );
+              // Entries about a job open it; a summary belongs to no job, so it stays inert
+              // rather than pretending to be a link.
+              return item.jobId ? (
+                <Link href={`/jobs?job=${item.jobId}`} className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>{body}</Link>
+              ) : (
+                <div className="activity-row" key={item.id} data-testid={`activity-row-${item.id}`}>{body}</div>
+              );
+            })}
           </div>
         ) : (
           <EmptyState title="Activity will collect here" body="Messages, checklist updates, and proof photos will show up as work happens." />
