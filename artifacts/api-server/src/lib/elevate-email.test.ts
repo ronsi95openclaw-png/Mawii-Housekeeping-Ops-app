@@ -88,6 +88,35 @@ describe("elevate schedule email", () => {
     expect(appointments[1]!.addOns).toEqual(["Laundry"]);
   });
 
+  it("keeps a multi-line address intact across the blank lines a real table produces", () => {
+    // Elevate's mail is an HTML table; converting </td></tr><tr><td> boundaries to text
+    // leaves a blank line between each address row. A real import once truncated the
+    // address to just its first line because of this.
+    const emailWithTableGaps = `Here is your schedule for Saturday, September 12th, 2026:
+
+11:00 AM – 4:30 PM (CDT)
+
+Location:
+
+Cadia Sherman, 3800 W Lamberth Rd
+
+Sherman, TX
+
+Apt 7703
+
+Client:
+
+Terese Jordan • +16264870205
+
+Appointment:
+
+2 bed/2 bath Deep Clean • Inside Oven, Inside Fridge, Inside Kitchen Cabinets
+`;
+    const { appointments, problems } = parseScheduleEmail(emailWithTableGaps);
+    expect(problems).toEqual([]);
+    expect(appointments[0]!.address).toBe("3800 W Lamberth Rd, Sherman, TX, Apt 7703");
+  });
+
   it("reports an unreadable email instead of dropping it quietly", () => {
     expect(parseScheduleEmail("Hello, nothing useful here").problems).toHaveLength(1);
     expect(parseScheduleEmail("Saturday, September 12th, 2026").problems[0]).toContain("No appointment time windows");

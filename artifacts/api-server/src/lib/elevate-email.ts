@@ -80,22 +80,23 @@ export function normalizeAddOns(text: string): string[] {
   return [...found];
 }
 
+const NEXT_LABEL = /^\s*(Location|Client|Appointment|Notes)\s*:?\s*$/i;
+
 function labelled(block: string, label: string): string | null {
   const pattern = new RegExp(`^\\s*${label}\\s*:?\\s*$`, "im");
   const lines = block.split(/\r?\n/);
   const index = lines.findIndex((line) => pattern.test(line));
   if (index >= 0) {
-    const rest = lines.slice(index + 1).find((line) => line.trim() && !/^[A-Z][A-Za-z ]{2,20}:$/.test(line.trim()));
-    if (rest) {
-      const collected: string[] = [];
-      for (const line of lines.slice(index + 1)) {
-        if (!line.trim()) { if (collected.length) break; continue; }
-        if (/^\s*(Location|Client|Appointment|Notes)\s*:?\s*$/i.test(line)) break;
-        collected.push(line.trim());
-      }
-      return collected.join(", ") || null;
+    // Elevate's HTML is a table, so a multi-line address gets a blank line between each
+    // row once converted to text — that must not end the section early, only skip it.
+    const collected: string[] = [];
+    for (const line of lines.slice(index + 1)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (NEXT_LABEL.test(trimmed)) break;
+      collected.push(trimmed);
     }
-    return null;
+    return collected.join(", ") || null;
   }
   const inline = new RegExp(`${label}\\s*:\\s*(.+)`, "i").exec(block);
   return inline ? inline[1]!.trim() : null;
