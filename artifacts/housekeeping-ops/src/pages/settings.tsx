@@ -24,7 +24,7 @@ export function Settings() {
   const services = [
     { name: 'Standard cleaning', rows: ['1 bed / 1 bath · 2 hr · $70', '2 bed / 2 bath · 3 hr · $105', '3 bed / 3 bath · 4 hr · $140'] },
     { name: 'Deep cleaning', rows: ['1 bed / 1 bath · 3 hr · $105', '2 bed / 2 bath · 4 hr · $140', '3 bed / 3 bath · 5 hr · $175'] },
-    { name: 'Move In/Out cleaning', rows: ['1 bed / 1 bath · 4.5 hr · $157.59', '2 bed / 2 bath · 5.5 hr · $192.50', '3 bed / 3 bath · 6.5 hr · $227.50'] },
+    { name: 'Move In/Out cleaning', rows: ['1 bed / 1 bath · 4.5 hr · $157.50', '2 bed / 2 bath · 5.5 hr · $192.50', '3 bed / 3 bath · 6.5 hr · $227.50'] },
   ];
   
   return (

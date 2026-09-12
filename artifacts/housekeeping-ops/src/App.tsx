@@ -50,7 +50,7 @@ const navItemsCleaner = [
 ];
 
 function Shell({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
   const health = useHealthCheck();
   const jobs = useListJobs();
@@ -140,7 +140,13 @@ function Shell({ children }: { children: ReactNode }) {
                       <button
                         className={`notification-row ${item.readAt ? '' : 'notification-unread'}`}
                         key={item.id}
-                        onClick={() => markRead.mutate({ id: item.id }, { onSuccess: () => void queryClient.invalidateQueries({ queryKey: getListNotificationsQueryKey({ limit: 30 }) }) })}
+                        onClick={() => {
+                          markRead.mutate({ id: item.id }, { onSuccess: () => void queryClient.invalidateQueries({ queryKey: getListNotificationsQueryKey({ limit: 30 }) }) });
+                          setShowNotifications(false);
+                          // Owners and managers land on the job the notification is about;
+                          // cleaners have no job-detail route and stay on My Jobs.
+                          if (item.jobId && !isCleaner) setLocation(`/jobs?job=${item.jobId}`);
+                        }}
                       >
                         <strong>{item.title}</strong>
                         <span>{item.body}</span>

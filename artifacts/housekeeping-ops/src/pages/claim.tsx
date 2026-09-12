@@ -8,6 +8,7 @@ export function ClaimEmployee({ onClaimed }: { onClaimed: () => void }) {
   const { user } = useUser();
   const [token, setToken] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -17,9 +18,16 @@ export function ClaimEmployee({ onClaimed }: { onClaimed: () => void }) {
 
   const copyUserId = async () => {
     if (!user?.id) return;
-    await navigator.clipboard.writeText(user.id);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    // Clipboard access can be blocked (permission denied, a non-secure context) with no
+    // visible sign to the user, so a failure has to fall back to something they can act on.
+    try {
+      await navigator.clipboard.writeText(user.id);
+      setCopyFailed(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyFailed(true);
+    }
   };
 
   return (
@@ -47,12 +55,13 @@ export function ClaimEmployee({ onClaimed }: { onClaimed: () => void }) {
           <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid hsl(var(--border))' }}>
             <p className="muted-copy">Joining as an owner or manager instead? Send this ID to an owner so they can add you from the Team page.</p>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' }}>
-              <code style={{ flex: '1 1 180px', padding: '10px', wordBreak: 'break-all', background: 'hsl(var(--secondary))', borderRadius: '8px', fontSize: '11px' }} data-testid="text-clerk-user-id">{user.id}</code>
+              <code style={{ flex: '1 1 180px', padding: '10px', wordBreak: 'break-all', background: 'hsl(var(--secondary))', borderRadius: '8px', fontSize: '11px', userSelect: 'all' }} data-testid="text-clerk-user-id">{user.id}</code>
               <button type="button" className="button button-secondary" onClick={copyUserId} data-testid="button-copy-clerk-user-id">
                 {copied ? <Check size={14} /> : <Copy size={14} />}
                 {copied ? 'Copied' : 'Copy'}
               </button>
             </div>
+            {copyFailed && <p className="form-error">Couldn't copy automatically — tap the ID above to select it, then copy manually.</p>}
           </div>
         )}
       </form>
