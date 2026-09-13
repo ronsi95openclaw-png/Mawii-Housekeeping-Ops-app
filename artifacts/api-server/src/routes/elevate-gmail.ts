@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, customersTable, employeesTable, jobsTable, jobImportEventsTable } from "@workspace/db";
 import { requireRole } from "../middlewares/auth";
 import { notifyEmployees } from "../lib/notifications";
-import { parseScheduleEmail, type ParsedAppointment } from "../lib/elevate-email";
+import { parseScheduleEmail } from "../lib/elevate-email";
 
 const router: IRouter = Router();
 
