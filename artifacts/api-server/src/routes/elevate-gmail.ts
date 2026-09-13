@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq, inArray } from "drizzle-orm";
-import { db, customersTable, employeesTable, jobsTable, jobImportEventsTable } from "@workspace/db";
+import { db, addressesTable, customersTable, employeesTable, jobsTable, jobImportEventsTable } from "@workspace/db";
 import { requireRole } from "../middlewares/auth";
 import { notifyEmployees } from "../lib/notifications";
 import { parseScheduleEmail } from "../lib/elevate-email";
@@ -94,6 +94,30 @@ function phoneKey(phone: string | null | undefined) {
   return (phone ?? "").replace(/\D/g, "").slice(-10);
 }
 
+/**
+ * Splits a one-line service address into the parts an address record needs.
+ * Elevate writes "6050 N Central Expy, Dallas, TX, Apt 2715" — the state is the anchor,
+ * the unit may sit on either side of it, and there is no postal code at all.
+ * Returns null when the state cannot be found, because a half-read address filed under a
+ * client is worse than none: it would be offered as a pick-list option and trusted.
+ */
+function splitAddress(full: string) {
+  const parts = full.split(",").map((part) => part.trim()).filter(Boolean);
+  const stateIndex = parts.findIndex((part) => /^[A-Z]{2}(\s+\d{5}(-\d{4})?)?$/.test(part));
+  if (stateIndex < 1) return null;
+
+  const [state, postalCode = ""] = parts[stateIndex]!.split(/\s+/);
+  const line2 = parts.slice(stateIndex + 1).join(", ") || null;
+  return {
+    line1: parts.slice(0, stateIndex - 1).join(", "),
+    line2,
+    city: parts[stateIndex - 1]!,
+    state: state!,
+    // Elevate does not send one. Left blank rather than guessed, so nobody reads it as real.
+    postalCode,
+  };
+}
+
 /** The client directory, read once per sync so matching does not re-query per appointment. */
 async function loadCustomerDirectory() {
   return db.select({ id: customersTable.id, name: customersTable.name, phone: customersTable.phone }).from(customersTable);
@@ -110,7 +134,7 @@ type CustomerDirectory = Awaited<ReturnType<typeof loadCustomerDirectory>>;
  */
 async function rememberCustomer(
   directory: CustomerDirectory,
-  appointment: { clientName: string; clientPhone: string | null },
+  appointment: { clientName: string; clientPhone: string | null; address?: string | null },
 ): Promise<"created" | "updated" | "known"> {
   const name = appointment.clientName.trim();
   if (!name) return "known";
@@ -120,6 +144,7 @@ async function rememberCustomer(
     (digits && phoneKey(customer.phone) === digits) || customer.name.trim().toLowerCase() === name.toLowerCase());
 
   if (existing) {
+    await rememberAddress(existing.id, appointment.address);
     if (!existing.phone && appointment.clientPhone) {
       await db.update(customersTable).set({ phone: appointment.clientPhone }).where(eq(customersTable.id, existing.id));
       existing.phone = appointment.clientPhone;
@@ -134,8 +159,24 @@ async function rememberCustomer(
     notes: "Added automatically from an ElevateOS schedule email.",
   }).returning({ id: customersTable.id, name: customersTable.name, phone: customersTable.phone });
   // Kept in the directory so two appointments for the same new client do not create two records.
-  if (row) directory.push(row);
+  if (row) {
+    directory.push(row);
+    await rememberAddress(row.id, appointment.address);
+  }
   return "created";
+}
+
+/** Files the service address under a client, once. Repeat visits reuse the stored record. */
+async function rememberAddress(customerId: number, address: string | null | undefined) {
+  const parsed = address ? splitAddress(address) : null;
+  if (!parsed || !parsed.line1) return;
+
+  const existing = await db.select({ id: addressesTable.id, line1: addressesTable.line1, line2: addressesTable.line2 })
+    .from(addressesTable).where(eq(addressesTable.customerId, customerId));
+  const same = (left: string | null, right: string | null) => (left ?? "").trim().toLowerCase() === (right ?? "").trim().toLowerCase();
+  if (existing.some((row) => same(row.line1, parsed.line1) && same(row.line2, parsed.line2))) return;
+
+  await db.insert(addressesTable).values({ customerId, ...parsed });
 }
 
 /**
@@ -144,7 +185,7 @@ async function rememberCustomer(
  * over the jobs already on the board picks them up; rememberCustomer skips the known ones.
  */
 async function backfillCustomersFromJobs(directory: CustomerDirectory): Promise<number> {
-  const rows = await db.select({ clientName: jobsTable.clientName, clientPhone: jobsTable.clientPhone }).from(jobsTable);
+  const rows = await db.select({ clientName: jobsTable.clientName, clientPhone: jobsTable.clientPhone, address: jobsTable.address }).from(jobsTable);
   let added = 0;
   for (const row of rows) {
     if (await rememberCustomer(directory, row) === "created") added += 1;
