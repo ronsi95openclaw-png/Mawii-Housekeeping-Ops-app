@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq, inArray } from "drizzle-orm";
-import { db, employeesTable, jobsTable, jobImportEventsTable } from "@workspace/db";
+import { db, customersTable, employeesTable, jobsTable, jobImportEventsTable } from "@workspace/db";
 import { requireRole } from "../middlewares/auth";
 import { notifyEmployees } from "../lib/notifications";
 import { parseScheduleEmail, type ParsedAppointment } from "../lib/elevate-email";
@@ -88,6 +88,70 @@ async function gmail(path: string): Promise<any> {
   return response;
 }
 
+
+/** Digits only, so "+1 (626) 487-0205" and "+16264870205" are recognised as one person. */
+function phoneKey(phone: string | null | undefined) {
+  return (phone ?? "").replace(/\D/g, "").slice(-10);
+}
+
+/** The client directory, read once per sync so matching does not re-query per appointment. */
+async function loadCustomerDirectory() {
+  return db.select({ id: customersTable.id, name: customersTable.name, phone: customersTable.phone }).from(customersTable);
+}
+type CustomerDirectory = Awaited<ReturnType<typeof loadCustomerDirectory>>;
+
+/**
+ * Keeps a client directory building itself from the imports. The Customers screen matches
+ * jobs to a customer by name or phone rather than by a key, so recording the client here
+ * gives them a profile and their service history without touching the job.
+ *
+ * Existing records are left alone apart from filling in a phone number we did not have —
+ * an owner may have corrected the name or added notes, and an import should not undo that.
+ */
+async function rememberCustomer(
+  directory: CustomerDirectory,
+  appointment: { clientName: string; clientPhone: string | null },
+): Promise<"created" | "updated" | "known"> {
+  const name = appointment.clientName.trim();
+  if (!name) return "known";
+  const digits = phoneKey(appointment.clientPhone);
+
+  const existing = directory.find((customer) =>
+    (digits && phoneKey(customer.phone) === digits) || customer.name.trim().toLowerCase() === name.toLowerCase());
+
+  if (existing) {
+    if (!existing.phone && appointment.clientPhone) {
+      await db.update(customersTable).set({ phone: appointment.clientPhone }).where(eq(customersTable.id, existing.id));
+      existing.phone = appointment.clientPhone;
+      return "updated";
+    }
+    return "known";
+  }
+
+  const [row] = await db.insert(customersTable).values({
+    name,
+    phone: appointment.clientPhone,
+    notes: "Added automatically from an ElevateOS schedule email.",
+  }).returning({ id: customersTable.id, name: customersTable.name, phone: customersTable.phone });
+  // Kept in the directory so two appointments for the same new client do not create two records.
+  if (row) directory.push(row);
+  return "created";
+}
+
+/**
+ * Jobs imported before the client directory existed have no customer record, and their
+ * emails fall out of the Gmail window, so a re-sync alone would never reach them. One pass
+ * over the jobs already on the board picks them up; rememberCustomer skips the known ones.
+ */
+async function backfillCustomersFromJobs(directory: CustomerDirectory): Promise<number> {
+  const rows = await db.select({ clientName: jobsTable.clientName, clientPhone: jobsTable.clientPhone }).from(jobsTable);
+  let added = 0;
+  for (const row of rows) {
+    if (await rememberCustomer(directory, row) === "created") added += 1;
+  }
+  return added;
+}
+
 function checklistPlaceholder() {
   return [] as unknown[];
 }
@@ -103,10 +167,13 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
     // The crew works Central time; a UTC "today" rolls over at 7pm and would skip the very
     // jobs this sync exists to import.
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
+    const directory = await loadCustomerDirectory();
+    let customersAdded = await backfillCustomersFromJobs(directory);
+
     const list = await gmail(`/gmail/v1/users/me/messages?q=${encodeURIComponent(buildQuery(days))}&maxResults=25`);
     const messages: Array<{ id: string }> = list?.messages ?? [];
     if (!messages.length) {
-      res.json({ scanned: 0, created: 0, alreadyImported: 0, skippedPast: 0, problems: [], serverStartedAt: SERVER_STARTED_AT });
+      res.json({ scanned: 0, created: 0, alreadyImported: 0, skippedPast: 0, customersAdded, problems: [], serverStartedAt: SERVER_STARTED_AT });
       return;
     }
 
@@ -129,6 +196,9 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
       problems.push(...parseProblems.map((problem) => `${problem} (read: ${body.replace(/\s+/g, " ").slice(0, 160)}…)`));
 
       for (const [index, appointment] of appointments.entries()) {
+        // Recorded before the date and duplicate checks: a client is worth keeping even when
+        // their appointment is in the past or the job is already on the board.
+        if (await rememberCustomer(directory, appointment) === "created") customersAdded += 1;
         if (!includePast && appointment.scheduledDate < today) { skippedPast += 1; continue; }
         const externalId = `${summary.id}:${index}`;
         const [existing] = await db.select({ id: jobsTable.id }).from(jobsTable)
@@ -181,7 +251,7 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
       }))));
     }
 
-    res.json({ scanned: messages.length, created: created.length, alreadyImported, skippedPast, problems, serverStartedAt: SERVER_STARTED_AT });
+    res.json({ scanned: messages.length, created: created.length, alreadyImported, skippedPast, customersAdded, problems, serverStartedAt: SERVER_STARTED_AT });
   } catch (error) {
     req.log?.error({ err: error }, "Elevate Gmail sync failed");
     // This route is owner/manager only and the detail is what makes a connector failure

@@ -263,7 +263,10 @@ paths:
                   scanned: { type: integer }
                   created: { type: integer }
                   alreadyImported: { type: integer }
+                  skippedPast: { type: integer }
+                  customersAdded: { type: integer }
                   problems: { type: array, items: { type: string } }
+                  serverStartedAt: { type: string, format: date-time }
   /integrations/elevate/jobs:
     post:
       operationId: importElevateJob

@@ -4,7 +4,7 @@ import {
   useListJobs, useCreateJob, useGetJob, useUpdateJob, useUpdateJobChecklist, 
   useSendJobMessage, useListEmployees, useListJobMessages, useListCustomers, useListCustomerAddresses,
   useGetElevateImportStatus, getGetElevateImportStatusQueryKey,
-  getListJobsQueryKey, getGetJobQueryKey, getGetDashboardSummaryQueryKey, getListJobMessagesQueryKey,
+  getListJobsQueryKey, getListCustomersQueryKey, getGetJobQueryKey, getGetDashboardSummaryQueryKey, getListJobMessagesQueryKey,
   useListJobReminders, useCreateJobReminder, getListJobRemindersQueryKey,
   useListNotifications, getListNotificationsQueryKey
 } from '@workspace/api-client-react';
@@ -72,10 +72,13 @@ export function Jobs() {
         `${result.created} new job${result.created === 1 ? '' : 's'} imported from ${result.scanned} email${result.scanned === 1 ? '' : 's'}`
         + (result.alreadyImported ? `, ${result.alreadyImported} already here` : '')
         + (result.skippedPast ? `, ${result.skippedPast} skipped as past` : '')
+        + (result.customersAdded ? `, ${result.customersAdded} new customer${result.customersAdded === 1 ? '' : 's'} saved` : '')
         + (problems.length ? `. ${problems.length} could not be read: ${problems[0]}` : '.')
         + (result.serverStartedAt ? ` (API started ${new Date(result.serverStartedAt).toLocaleTimeString()})` : ' (API build predates this check — restart the API workflow)'),
       );
       void queryClient.invalidateQueries({ queryKey: getListJobsQueryKey() });
+      // The import can create customer records too, so the Customers page must not stay stale.
+      void queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
       void elevate.refetch();
     } catch (error) {
       setSyncResult(`Could not read the Elevate mailbox. ${error instanceof Error ? error.message : ''}`.trim());
