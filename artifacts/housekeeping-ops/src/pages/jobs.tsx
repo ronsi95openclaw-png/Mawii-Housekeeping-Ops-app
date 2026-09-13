@@ -289,6 +289,13 @@ function EditJobDialog({ job, onClose, onSubmit, pending, failed }: { job: Job; 
   );
 }
 
+/** Elevate imports carry no postal code, so the parts are joined only when present. */
+function formatAddress(address: { line1: string; line2?: string | null; city: string; state: string; postalCode: string }) {
+  const street = [address.line1, address.line2].filter(Boolean).join(', ');
+  const region = [address.state, address.postalCode].filter(Boolean).join(' ');
+  return [street, address.city, region].filter(Boolean).join(', ');
+}
+
 export function CreateJobDialog({ onClose, onSubmit, pending, initialDate, failed }: { onClose: () => void; onSubmit: (data: NewJobForm) => void; pending: boolean; initialDate?: string; failed?: boolean }) {
   const employees = useListEmployees();
   const customers = useListCustomers();
@@ -328,12 +335,20 @@ export function CreateJobDialog({ onClose, onSubmit, pending, initialDate, faile
   const handleAddressChange = (id: string) => {
     const addr = (addresses.data || []).find(a => a.id.toString() === id);
     if (addr) {
-      const addressString = `${addr.line1}${addr.line2 ? `, ${addr.line2}` : ''}, ${addr.city}, ${addr.state} ${addr.postalCode}`;
-      setForm(f => ({ ...f, addressId: id, address: addressString }));
+      setForm(f => ({ ...f, addressId: id, address: formatAddress(addr) }));
     } else {
       setForm(f => ({ ...f, addressId: '' }));
     }
   };
+
+  // Picking a client clears the address, so the one address on file is filled straight back
+  // in — otherwise a returning client means retyping an address the app already knows.
+  const stored = addresses.data;
+  useEffect(() => {
+    if (!selectedCustomerId || !stored || stored.length !== 1) return;
+    const only = stored[0];
+    setForm(f => (f.addressId || f.address ? f : { ...f, addressId: String(only.id), address: formatAddress(only) }));
+  }, [selectedCustomerId, stored]);
 
   return (
     <div className="modal-scrim" onClick={onClose}>
@@ -353,7 +368,7 @@ export function CreateJobDialog({ onClose, onSubmit, pending, initialDate, faile
             <label className="span-2">Select existing address (optional)
               <select value={form.addressId} onChange={e => handleAddressChange(e.target.value)}>
                 <option value="">-- Enter manually --</option>
-                {(addresses.data || []).map(a => <option key={a.id} value={a.id}>{a.line1}</option>)}
+                {(addresses.data || []).map(a => <option key={a.id} value={a.id}>{formatAddress(a)}</option>)}
               </select>
             </label>
           )}
