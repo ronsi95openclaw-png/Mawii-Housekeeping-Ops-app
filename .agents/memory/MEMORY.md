@@ -5,3 +5,4 @@
 - [Clerk API token forwarding](clerk-api-token-forwarding.md) — Preview Clerk sessions need an explicit bearer-token bridge to reach the API reliably.
 - [Replit production isolation](replit-production-isolation.md) — Published PostgreSQL and managed Clerk production identities are separate from development and need explicit onboarding.
 - [GitHub push fallback](github-push-fallback.md) — When HTTPS Git auth fails, use the installed GitHub connector for non-force branch updates.
+- [API build staleness](api-build-staleness.md) — Restart the API after pulls because frontend hot reload can hide an older compiled server bundle.
