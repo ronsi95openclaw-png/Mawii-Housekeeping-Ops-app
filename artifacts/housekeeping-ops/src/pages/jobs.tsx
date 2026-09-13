@@ -72,7 +72,9 @@ export function Jobs() {
         `${result.created} new job${result.created === 1 ? '' : 's'} imported from ${result.scanned} email${result.scanned === 1 ? '' : 's'}`
         + (result.alreadyImported ? `, ${result.alreadyImported} already here` : '')
         + (result.skippedPast ? `, ${result.skippedPast} skipped as past` : '')
-        + (result.customersAdded ? `, ${result.customersAdded} new customer${result.customersAdded === 1 ? '' : 's'} saved` : '')
+        + (result.customersTotal === undefined
+          ? ', clients not recorded — the API is running an older build'
+          : `, ${result.customersAdded} new client${result.customersAdded === 1 ? '' : 's'} saved (${result.customersTotal} on file)`)
         + (problems.length ? `. ${problems.length} could not be read: ${problems[0]}` : '.')
         + (result.serverStartedAt ? ` (API started ${new Date(result.serverStartedAt).toLocaleTimeString()})` : ' (API build predates this check — restart the API workflow)'),
       );

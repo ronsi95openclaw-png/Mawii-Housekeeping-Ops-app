@@ -173,7 +173,7 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
     const list = await gmail(`/gmail/v1/users/me/messages?q=${encodeURIComponent(buildQuery(days))}&maxResults=25`);
     const messages: Array<{ id: string }> = list?.messages ?? [];
     if (!messages.length) {
-      res.json({ scanned: 0, created: 0, alreadyImported: 0, skippedPast: 0, customersAdded, problems: [], serverStartedAt: SERVER_STARTED_AT });
+      res.json({ scanned: 0, created: 0, alreadyImported: 0, skippedPast: 0, customersAdded, customersTotal: directory.length, problems: [], serverStartedAt: SERVER_STARTED_AT });
       return;
     }
 
@@ -251,7 +251,7 @@ router.post("/integrations/elevate/gmail-sync", requireRole("owner", "manager"),
       }))));
     }
 
-    res.json({ scanned: messages.length, created: created.length, alreadyImported, skippedPast, customersAdded, problems, serverStartedAt: SERVER_STARTED_AT });
+    res.json({ scanned: messages.length, created: created.length, alreadyImported, skippedPast, customersAdded, customersTotal: directory.length, problems, serverStartedAt: SERVER_STARTED_AT });
   } catch (error) {
     req.log?.error({ err: error }, "Elevate Gmail sync failed");
     // This route is owner/manager only and the detail is what makes a connector failure
