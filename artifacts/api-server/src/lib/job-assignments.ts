@@ -7,6 +7,7 @@ export async function checkAssignmentEligibility(employeeIds: readonly number[])
     ? await db
       .select({
         id: employeesTable.id,
+        name: employeesTable.name,
         active: employeesTable.active,
         role: employeesTable.role,
       })
