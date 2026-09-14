@@ -167,37 +167,87 @@ router.patch("/service-plans/:id", requireRole("owner", "manager"), async (req, 
 router.post("/service-plans/:id/pause", requireRole("owner", "manager"), async (req, res) => res.json((await db.update(servicePlansTable).set({ pausedAt: new Date() }).where(eq(servicePlansTable.id, id(req.params.id))).returning())[0]));
 router.post("/service-plans/:id/resume", requireRole("owner", "manager"), async (req, res) => res.json((await db.update(servicePlansTable).set({ pausedAt: null }).where(eq(servicePlansTable.id, id(req.params.id))).returning())[0]));
 router.post("/service-plans/:id/generate", requireRole("owner", "manager"), async (req, res) => {
-  const plan = (await db.select().from(servicePlansTable).where(eq(servicePlansTable.id, id(req.params.id))))[0];
-  if (!plan) { res.status(404).json({ error: "Service plan not found" }); return; }
-  if (plan.pausedAt) { res.status(409).json({ error: "Service plan is paused" }); return; }
-  const dates = generateOccurrences(plan.nextOccurrence, { frequency: plan.frequency as any, intervalWeeks: plan.intervalWeeks ?? undefined }, Number(body(req).count ?? 12));
-  const customer = (await db.select().from(customersTable).where(eq(customersTable.id, plan.customerId)))[0];
-  const address = (await db.select().from(addressesTable).where(eq(addressesTable.id, plan.addressId)))[0];
-  if (!customer || !address) { res.status(422).json({ error: "Plan customer/address is missing" }); return; }
-  const rows = [];
-  for (const occurrenceDate of dates) {
-    const existing = (await db.select().from(serviceOccurrencesTable).where(and(eq(serviceOccurrencesTable.planId, plan.id), eq(serviceOccurrencesTable.occurrenceDate, occurrenceDate))))[0];
-    if (existing) { rows.push(existing); continue; }
-    const [job] = await db.insert(jobsTable).values({
-      clientName: customer.name,
-      address: `${address.line1}, ${address.city}, ${address.state} ${address.postalCode}`,
-      scheduledDate: occurrenceDate,
-      startTime: String(plan.preferences.startTime ?? "09:00"),
-      endTime: String(plan.preferences.endTime ?? "12:00"),
-      serviceType: plan.serviceType,
-      status: "scheduled",
-      teamMemberIds: [],
-      checklist: [],
-      photos: [],
-      accessInstructions: address.accessNotes,
-    }).returning();
-    const [occurrence] = await db.insert(serviceOccurrencesTable).values({ planId: plan.id, occurrenceDate, jobId: job.id }).returning();
-    rows.push(occurrence);
+  const planId = id(req.params.id);
+  const requestedCount = body(req).count ?? 12;
+  if (typeof requestedCount !== "number" || !Number.isSafeInteger(requestedCount) || requestedCount < 1 || requestedCount > 100) {
+    res.status(400).json({ error: "count must be an integer between 1 and 100" });
+    return;
   }
-  const next = dates.at(-1);
-  if (next) await db.update(servicePlansTable).set({ nextOccurrence: generateOccurrences(next, { frequency: plan.frequency as any, intervalWeeks: plan.intervalWeeks ?? undefined }, 2)[1]! }).where(eq(servicePlansTable.id, plan.id));
-  await event("recurrence", "Service occurrences generated", `${rows.length} occurrence(s) generated`);
-  res.status(201).json(rows);
+
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`mawii:service-plan-generation:${planId}`}))`);
+    const [plan] = await tx.select().from(servicePlansTable).where(eq(servicePlansTable.id, planId));
+    if (!plan) return { kind: "missing" as const };
+    if (plan.pausedAt) return { kind: "paused" as const };
+
+    const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, plan.customerId));
+    const [address] = await tx.select().from(addressesTable).where(eq(addressesTable.id, plan.addressId));
+    if (!customer || !address || address.customerId !== plan.customerId) return { kind: "invalid-reference" as const };
+
+    const dates = generateOccurrences(
+      plan.nextOccurrence,
+      { frequency: plan.frequency as any, intervalWeeks: plan.intervalWeeks ?? undefined },
+      requestedCount,
+    );
+    const rows = [];
+    for (const occurrenceDate of dates) {
+      const [existing] = await tx.select().from(serviceOccurrencesTable).where(and(
+        eq(serviceOccurrencesTable.planId, plan.id),
+        eq(serviceOccurrencesTable.occurrenceDate, occurrenceDate),
+      ));
+      if (existing) {
+        rows.push(existing);
+        continue;
+      }
+
+      const [job] = await tx.insert(jobsTable).values({
+        clientName: customer.name,
+        address: `${address.line1}, ${address.city}, ${address.state} ${address.postalCode}`,
+        scheduledDate: occurrenceDate,
+        startTime: String(plan.preferences.startTime ?? "09:00"),
+        endTime: String(plan.preferences.endTime ?? "12:00"),
+        serviceType: plan.serviceType,
+        status: "scheduled",
+        teamMemberIds: [],
+        checklist: [],
+        photos: [],
+        accessInstructions: address.accessNotes,
+      }).returning();
+      const [occurrence] = await tx.insert(serviceOccurrencesTable)
+        .values({ planId: plan.id, occurrenceDate, jobId: job.id })
+        .onConflictDoNothing()
+        .returning();
+      if (occurrence) {
+        rows.push(occurrence);
+      } else {
+        await tx.delete(jobsTable).where(eq(jobsTable.id, job.id));
+        const [conflictingOccurrence] = await tx.select().from(serviceOccurrencesTable).where(and(
+          eq(serviceOccurrencesTable.planId, plan.id),
+          eq(serviceOccurrencesTable.occurrenceDate, occurrenceDate),
+        ));
+        if (!conflictingOccurrence) throw new Error("Occurrence conflict did not resolve to an existing row");
+        rows.push(conflictingOccurrence);
+      }
+    }
+
+    const next = dates.at(-1);
+    if (next) {
+      await tx.update(servicePlansTable)
+        .set({ nextOccurrence: generateOccurrences(next, { frequency: plan.frequency as any, intervalWeeks: plan.intervalWeeks ?? undefined }, 2)[1]! })
+        .where(eq(servicePlansTable.id, plan.id));
+    }
+    await tx.insert(activityEventsTable).values({
+      type: "recurrence",
+      title: "Service occurrences generated",
+      detail: `${rows.length} occurrence(s) generated`,
+    });
+    return { kind: "generated" as const, rows };
+  });
+
+  if (result.kind === "missing") { res.status(404).json({ error: "Service plan not found" }); return; }
+  if (result.kind === "paused") { res.status(409).json({ error: "Service plan is paused" }); return; }
+  if (result.kind === "invalid-reference") { res.status(422).json({ error: "Plan customer/address is missing or mismatched" }); return; }
+  res.status(201).json(result.rows);
 });
 router.post("/occurrences/:id/skip", requireRole("owner", "manager"), async (req, res) => res.json((await db.update(serviceOccurrencesTable).set({ status: "skipped", skippedReason: body(req).reason ?? "Skipped by operator" }).where(eq(serviceOccurrencesTable.id, id(req.params.id))).returning())[0]));
 router.patch("/occurrences/:id", requireRole("owner", "manager"), async (req, res) => res.json((await db.update(serviceOccurrencesTable).set(body(req)).where(eq(serviceOccurrencesTable.id, id(req.params.id))).returning())[0]));
