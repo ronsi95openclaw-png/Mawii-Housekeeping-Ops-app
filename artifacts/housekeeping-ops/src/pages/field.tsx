@@ -20,16 +20,26 @@ import { useQueryClient } from '@tanstack/react-query';
 import { MapPin, Clock3, Check, Camera, Coffee, AlertTriangle, ChevronRight, X, Image as ImageIcon, Map as MapIcon } from 'lucide-react';
 import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, formatDate, formatTime, statusTone, statusLabel, AddressLink } from '@/lib/shared';
 
-function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignment; onSelect: (jobId: number, assignmentId: number) => void; unread: boolean }) {
+type Feedback = { kind: 'success' | 'error'; message: string };
+
+function assignmentStateLabel(jobStatus: string | undefined, assignmentStatus: string | undefined, hasActiveEntry: boolean) {
+  if (jobStatus === 'completed') return { label: 'Completed', tone: 'green' as const };
+  if (jobStatus === 'in_progress' || hasActiveEntry) return { label: 'In progress', tone: 'orange' as const };
+  if (assignmentStatus === 'accepted') return { label: 'Accepted', tone: 'green' as const };
+  if (assignmentStatus === 'declined') return { label: 'Declined', tone: 'red' as const };
+  return { label: 'Pending', tone: 'neutral' as const };
+}
+
+function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignment; onSelect: (jobId: number, assignmentId: number, status: string) => void; unread: boolean }) {
   const { data: job, isLoading } = useGetJob(assignment.jobId, { query: { queryKey: getGetJobQueryKey(assignment.jobId) } });
 
   return (
-    <button className="job-list-row" onClick={() => onSelect(assignment.jobId, assignment.id)} style={{ display: 'grid', gridTemplateColumns: '1fr auto', height: 'auto', padding: '16px' }}>
+    <button className="job-list-row" onClick={() => onSelect(assignment.jobId, assignment.id, assignment.status)} style={{ display: 'grid', gridTemplateColumns: '1fr auto', height: 'auto', padding: '16px' }}>
       <div className="job-list-main">
         <div className="job-title-line">
           <strong>{isLoading ? 'Loading...' : (job?.clientName || 'Job')}</strong>
           {unread ? <span className="unread-flag" data-testid={`unread-job-${assignment.jobId}`}>New message</span> : null}
-          <Badge tone={statusTone(job?.status || assignment.status)}>{statusLabel(job?.status || assignment.status)}</Badge>
+          <Badge tone={assignmentStateLabel(job?.status, assignment.status, false).tone}>{assignmentStateLabel(job?.status, assignment.status, false).label}</Badge>
         </div>
         <span><MapPin size={13} /> {job?.address || '—'}</span>
         <small>{job?.serviceType} · {formatDate(job?.scheduledDate)}</small>
@@ -42,7 +52,7 @@ function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignme
 export function Field() {
   const jobs = useListAssignedJobs();
   const notifications = useListNotifications({ limit: 30 }, { query: { queryKey: getListNotificationsQueryKey({ limit: 30 }), refetchInterval: 30_000 } });
-  const [selected, setSelected] = useState<{ jobId: number; assignmentId: number } | null>(null);
+  const [selected, setSelected] = useState<{ jobId: number; assignmentId: number; status: string } | null>(null);
 
   const jobsWithUnreadMessages = new Set(
     (notifications.data || []).filter((item) => item.kind === 'message' && !item.readAt && item.jobId).map((item) => item.jobId),
@@ -54,7 +64,7 @@ export function Field() {
   const assignments = jobs.data || [];
   
   if (selected) {
-    return <FieldJobDetail jobId={selected.jobId} assignmentId={selected.assignmentId} onBack={() => setSelected(null)} />;
+    return <FieldJobDetail jobId={selected.jobId} assignmentId={selected.assignmentId} initialAssignmentStatus={selected.status} onBack={() => setSelected(null)} />;
   }
 
   return (
@@ -64,7 +74,7 @@ export function Field() {
       {assignments.length ? (
         <div className="job-list">
           {assignments.map((assignment) => (
-            <FieldJobRow key={assignment.id} assignment={assignment} unread={jobsWithUnreadMessages.has(assignment.jobId)} onSelect={(jobId, assignmentId) => setSelected({ jobId, assignmentId })} />
+            <FieldJobRow key={assignment.id} assignment={assignment} unread={jobsWithUnreadMessages.has(assignment.jobId)} onSelect={(jobId, assignmentId, status) => setSelected({ jobId, assignmentId, status })} />
           ))}
         </div>
       ) : (
