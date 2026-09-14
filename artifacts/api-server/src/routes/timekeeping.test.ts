@@ -65,8 +65,11 @@ describe("timekeeping route authorization and timing", () => {
       const { server, baseUrl } = await startServer();
       let assignedCleanerId: number | undefined;
       let unrelatedCleanerId: number | undefined;
+      let inactiveCleanerId: number | undefined;
       let jobId: number | undefined;
       let assignmentId: number | undefined;
+      let concurrentJobId: number | undefined;
+      let concurrentAssignmentId: number | undefined;
       const timeEntryIds: number[] = [];
 
       try {
@@ -97,6 +100,17 @@ describe("timekeeping route authorization and timing", () => {
           },
         }), 201) as { id: number };
         unrelatedCleanerId = unrelatedCleaner.id;
+        const inactiveCleaner = expectStatus(await request(baseUrl, "/employees", {
+          method: "POST",
+          headers: ownerHeaders,
+          body: {
+            name: `${token} inactive cleaner`,
+            clerkUserId: `${token}-inactive`,
+            role: "cleaner",
+            active: "false",
+          },
+        }), 201) as { id: number };
+        inactiveCleanerId = inactiveCleaner.id;
 
         const job = expectStatus(await request(baseUrl, "/jobs", {
           method: "POST",
@@ -127,6 +141,19 @@ describe("timekeeping route authorization and timing", () => {
         expect(assignment).toBeDefined();
         assignmentId = assignment!.id;
 
+        expectStatus(await request(baseUrl, `/jobs/999999/time/clock-in`, {
+          method: "POST",
+          headers: { "x-dev-user-id": assignedCleanerUserId },
+        }), 404);
+        expectStatus(await request(baseUrl, `/jobs/${job.id}/time/clock-in`, {
+          method: "POST",
+          headers: { "x-dev-user-id": inactiveCleanerUserId },
+        }), 403);
+        expectStatus(await request(baseUrl, `/jobs/${job.id}/time/clock-in`, {
+          method: "POST",
+          headers: { "x-dev-user-id": unrelatedCleanerUserId },
+        }), 403);
+
         expectStatus(await request(baseUrl, `/assignments/${assignment!.id}/accept`, {
           method: "POST",
           headers: { "x-dev-user-id": assignedCleanerUserId },
@@ -139,10 +166,59 @@ describe("timekeeping route authorization and timing", () => {
         timeEntryIds.push(clockedIn.id);
         expect(clockedIn.clockOut).toBeNull();
 
-        expectStatus(await request(baseUrl, `/jobs/${job.id}/time/clock-in`, {
+        const repeatedClockIn = expectStatus(await request(baseUrl, `/jobs/${job.id}/time/clock-in`, {
           method: "POST",
           headers: { "x-dev-user-id": assignedCleanerUserId },
-        }), 409);
+        }), 200) as { id: number };
+        expect(repeatedClockIn.id).toBe(clockedIn.id);
+
+        const concurrentJob = expectStatus(await request(baseUrl, "/jobs", {
+          method: "POST",
+          headers: ownerHeaders,
+          body: {
+            clientName: `${token} concurrent job`,
+            address: "501 Concurrent Time Street, Dallas, TX 75001",
+            scheduledDate: "2030-01-16",
+            startTime: "09:00",
+            endTime: "11:00",
+            serviceType: "Standard cleaning",
+            serviceVariant: "Concurrent clock-in regression",
+            addOns: [],
+            durationMinutes: 120,
+            frequency: "One-time",
+            notes: "Disposable concurrent clock-in fixture",
+            clientPhone: "+12145550504",
+            teamMemberIds: [],
+            employeeIds: [assignedCleaner.id],
+          },
+        }), 201) as { id: number };
+        concurrentJobId = concurrentJob.id;
+        const [concurrentAssignment] = await db.select().from(jobAssignmentsTable).where(and(
+          eq(jobAssignmentsTable.jobId, concurrentJob.id),
+          eq(jobAssignmentsTable.employeeId, assignedCleaner.id),
+        ));
+        expect(concurrentAssignment).toBeDefined();
+        concurrentAssignmentId = concurrentAssignment!.id;
+        expectStatus(await request(baseUrl, `/assignments/${concurrentAssignment!.id}/accept`, {
+          method: "POST",
+          headers: { "x-dev-user-id": assignedCleanerUserId },
+        }), 200);
+        const concurrentClockIns = await Promise.all([
+          request(baseUrl, `/jobs/${concurrentJob.id}/time/clock-in`, {
+            method: "POST",
+            headers: { "x-dev-user-id": assignedCleanerUserId },
+          }),
+          request(baseUrl, `/jobs/${concurrentJob.id}/time/clock-in`, {
+            method: "POST",
+            headers: { "x-dev-user-id": assignedCleanerUserId },
+          }),
+        ]);
+        expect(concurrentClockIns.map((result) => result.status).sort()).toEqual([200, 201]);
+        const concurrentEntryIds = concurrentClockIns.map((result) => (result.body as { id: number }).id);
+        expect(concurrentEntryIds[0]).toBe(concurrentEntryIds[1]);
+        const concurrentEntries = await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.jobId, concurrentJob.id));
+        expect(concurrentEntries).toHaveLength(1);
+        timeEntryIds.push(concurrentEntries[0]!.id);
 
         expectStatus(await request(baseUrl, `/jobs/${job.id}/time/clock-in`, {
           method: "POST",
@@ -175,6 +251,12 @@ describe("timekeeping route authorization and timing", () => {
         expect(clockedOut.clockOut).not.toBeNull();
         expect(new Date(clockedOut.clockOut!).getTime()).toBeGreaterThan(new Date(clockedOut.clockIn).getTime());
         expect(clockedOut.breaksMinutes).toBe(15);
+        const repeatedClockOut = expectStatus(await request(baseUrl, `/time-entries/${clockedIn.id}/clock-out`, {
+          method: "POST",
+          headers: { "x-dev-user-id": assignedCleanerUserId },
+        }), 200) as { id: number; clockOut: string | null };
+        expect(repeatedClockOut.id).toBe(clockedIn.id);
+        expect(repeatedClockOut.clockOut).toBe(clockedOut.clockOut);
 
         const fixedValid = (await db.insert(timeEntriesTable).values({
           jobId: job.id,
@@ -241,11 +323,17 @@ describe("timekeeping route authorization and timing", () => {
           await db.delete(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, jobId));
           await db.delete(jobsTable).where(eq(jobsTable.id, jobId));
         }
-        const employeeIds = [assignedCleanerId, unrelatedCleanerId].filter((id): id is number => id !== undefined);
+        if (concurrentJobId) {
+          await db.delete(activityEventsTable).where(eq(activityEventsTable.jobId, concurrentJobId));
+          await db.delete(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, concurrentJobId));
+          await db.delete(jobsTable).where(eq(jobsTable.id, concurrentJobId));
+        }
+        const employeeIds = [assignedCleanerId, unrelatedCleanerId, inactiveCleanerId].filter((id): id is number => id !== undefined);
         if (employeeIds.length) {
           await db.delete(employeesTable).where(inArray(employeesTable.id, employeeIds));
         }
         void assignmentId;
+        void concurrentAssignmentId;
       }
     },
     30_000,

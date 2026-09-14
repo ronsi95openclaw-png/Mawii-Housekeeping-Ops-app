@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import crypto, { createHash, randomBytes } from "node:crypto";
-import { and, eq, ne, gte, lte, asc, desc, inArray, isNull } from "drizzle-orm";
+import { and, eq, ne, gte, lte, asc, desc, inArray, isNull, sql } from "drizzle-orm";
 import { db, customersTable, addressesTable, servicePlansTable, serviceOccurrencesTable, employeesTable, employeeBindingTokensTable, employeeJobNotesTable, jobAssignmentsTable, timeEntriesTable, proofPhotosTable, incidentsTable, incidentHistoryTable, workerRatesTable, payPeriodsTable, payoutRecordsTable, activityEventsTable, messagesTable, notificationsTable, jobsTable } from "@workspace/db";
 import { requireActiveEmployee, requireAuth, requireRole } from "../middlewares/auth";
 import { generateOccurrences } from "../lib/recurrence";
@@ -293,13 +293,64 @@ router.post("/assignments/:id/:decision", async (req, res) => {
 });
 
 router.post("/jobs/:jobId/time/clock-in", async (req, res) => {
+  const jobId = id(req.params.jobId);
   const employee = req.authContext ? (await db.select().from(employeesTable).where(eq(employeesTable.clerkUserId, req.authContext.clerkUserId)))[0] : undefined;
-  if (!employee) { res.status(403).json({ error: "No employee profile is linked to this Clerk user" }); return; }
-  if (!(await canAccessJob(req, id(req.params.jobId)))) { res.status(403).json({ error: "Job is not assigned to you" }); return; }
-  if ((await db.select().from(timeEntriesTable).where(and(eq(timeEntriesTable.jobId, id(req.params.jobId)), eq(timeEntriesTable.employeeId, employee.id), isNull(timeEntriesTable.clockOut)))).length) { res.status(409).json({ error: "An active time entry already exists" }); return; }
-  const [entry] = await db.insert(timeEntriesTable).values({ jobId: id(req.params.jobId), employeeId: employee.id, clockIn: new Date() }).returning(); res.status(201).json(entry);
+  if (!employee || employee.active !== "true" || employee.role !== "cleaner") {
+    res.status(403).json({ error: "An active cleaner employee profile is required" });
+    return;
+  }
+  const [job] = await db.select({ id: jobsTable.id }).from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  const [acceptedAssignment] = await db.select({ id: jobAssignmentsTable.id })
+    .from(jobAssignmentsTable)
+    .where(and(
+      eq(jobAssignmentsTable.jobId, jobId),
+      eq(jobAssignmentsTable.employeeId, employee.id),
+      eq(jobAssignmentsTable.status, "accepted"),
+    ));
+  if (!acceptedAssignment) { res.status(403).json({ error: "An accepted job assignment is required" }); return; }
+
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`mawii:time-entry:${jobId}:${employee.id}`}))`);
+    const [openEntry] = await tx.select().from(timeEntriesTable).where(and(
+      eq(timeEntriesTable.jobId, jobId),
+      eq(timeEntriesTable.employeeId, employee.id),
+      isNull(timeEntriesTable.clockOut),
+    ));
+    if (openEntry) return { entry: openEntry, created: false };
+    const [createdEntry] = await tx.insert(timeEntriesTable).values({
+      jobId,
+      employeeId: employee.id,
+      clockIn: new Date(),
+    }).returning();
+    return { entry: createdEntry, created: true };
+  });
+  res.status(result.created ? 201 : 200).json(result.entry);
 });
-router.post("/time-entries/:id/clock-out", async (req, res) => { const entry = (await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, id(req.params.id))))[0]; if (!entry) { res.status(404).json({ error: "Time entry not found" }); return; } if (!(await canAccessJob(req, entry.jobId))) { res.status(403).json({ error: "Time entry is not yours" }); return; } const clockOut = new Date(); if (!isChronologicalTimeEntry(entry.clockIn, clockOut)) { res.status(409).json({ error: "Clock-out must be after clock-in" }); return; } res.json((await db.update(timeEntriesTable).set({ clockOut }).where(eq(timeEntriesTable.id, entry.id)).returning())[0]); });
+router.post("/time-entries/:id/clock-out", async (req, res) => {
+  const timeEntryId = id(req.params.id);
+  const entry = (await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, timeEntryId)))[0];
+  if (!entry) { res.status(404).json({ error: "Time entry not found" }); return; }
+  if (!(await canAccessJob(req, entry.jobId))) { res.status(403).json({ error: "Time entry is not yours" }); return; }
+
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`mawii:time-entry:${entry.jobId}:${entry.employeeId}`}))`);
+    const [current] = await tx.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, timeEntryId));
+    if (!current) return { kind: "missing" as const };
+    if (current.clockOut) return { kind: "completed" as const, entry: current };
+    const clockOut = new Date();
+    if (!isChronologicalTimeEntry(current.clockIn, clockOut)) return { kind: "invalid" as const };
+    const [updated] = await tx.update(timeEntriesTable)
+      .set({ clockOut })
+      .where(and(eq(timeEntriesTable.id, timeEntryId), isNull(timeEntriesTable.clockOut)))
+      .returning();
+    return updated ? { kind: "updated" as const, entry: updated } : { kind: "conflict" as const };
+  });
+  if (result.kind === "missing") { res.status(404).json({ error: "Time entry not found" }); return; }
+  if (result.kind === "invalid") { res.status(409).json({ error: "Clock-out must be after clock-in" }); return; }
+  if (result.kind === "conflict") { res.status(409).json({ error: "Time entry could not be clocked out" }); return; }
+  res.json(result.entry);
+});
 router.post("/time-entries/:id/break", async (req, res) => { const entry = (await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, id(req.params.id))))[0]; if (!entry || !(await canAccessJob(req, entry.jobId))) { res.status(entry ? 403 : 404).json({ error: entry ? "Time entry is not yours" : "Time entry not found" }); return; } const minutes = Number(body(req).minutes ?? 0); if (!isValidBreakMinutes(entry.clockIn, entry.clockOut, minutes)) { res.status(409).json({ error: "Break minutes cannot exceed worked time" }); return; } res.json((await db.update(timeEntriesTable).set({ breaksMinutes: minutes }).where(eq(timeEntriesTable.id, entry.id)).returning())[0]); });
 router.post("/time-entries/:id/correction", async (req, res) => { const entry = (await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, id(req.params.id))))[0]; if (!entry || !(await canAccessJob(req, entry.jobId))) { res.status(entry ? 403 : 404).json({ error: entry ? "Time entry is not yours" : "Time entry not found" }); return; } const correctionMinutes = Number(body(req).minutes); if (!isValidCorrectionMinutes(entry.clockIn, entry.clockOut, entry.breaksMinutes, correctionMinutes)) { res.status(409).json({ error: "Correction would create an impossible time entry" }); return; } res.json((await db.update(timeEntriesTable).set({ correctionMinutes, correctionReason: body(req).reason, correctionStatus: "pending" }).where(eq(timeEntriesTable.id, entry.id)).returning())[0]); });
 router.post("/time-entries/:id/approve", requireRole("owner", "manager"), async (req, res) => { const manager = await currentEmployee(req); const [updated] = await db.update(timeEntriesTable).set({ correctionStatus: "approved", approvedAt: new Date(), approvedBy: manager?.id ?? null }).where(and(eq(timeEntriesTable.id, id(req.params.id)), eq(timeEntriesTable.correctionStatus, "pending"))).returning(); if (!updated) { res.status(404).json({ error: "Pending time correction not found" }); return; } await event("time", "Time correction approved", undefined, updated.jobId); res.json(updated); });
