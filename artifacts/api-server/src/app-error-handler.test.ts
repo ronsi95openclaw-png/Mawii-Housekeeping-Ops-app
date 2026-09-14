@@ -24,7 +24,14 @@ describe("API error handling", () => {
       expect(text).not.toContain("secret failure");
       expect(text).not.toContain("/workspace/src/routes/probe.ts");
       expect(text).not.toContain("Error:");
-      expect(JSON.parse(text)).toEqual({ error: "Request failed" });
+      const payload = JSON.parse(text) as { error?: unknown; serverStartedAt?: unknown };
+      expect(Object.keys(payload).sort()).toEqual(["error", "serverStartedAt"]);
+      expect(payload.error).toBe("Request failed");
+      const { serverStartedAt } = payload;
+      expect(typeof serverStartedAt).toBe("string");
+      if (typeof serverStartedAt !== "string") throw new Error("serverStartedAt must be a string");
+      expect(serverStartedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      expect(new Date(serverStartedAt).toISOString()).toBe(serverStartedAt);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
