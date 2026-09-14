@@ -250,6 +250,13 @@ describe("cleaner assigned-job workflow", () => {
           },
         }), 201) as { id: number };
         photoIds.push(beforePhoto.id);
+        const [persistedBeforePhoto] = await db.select().from(proofPhotosTable).where(eq(proofPhotosTable.id, beforePhoto.id));
+        expect(persistedBeforePhoto).toMatchObject({
+          jobId: job.id,
+          uploadedBy: assignedCleanerId,
+          kind: "before",
+        });
+        expect(persistedBeforePhoto?.capturedAt).toBeInstanceOf(Date);
         const oneProof = expectStatus(await request(baseUrl, `/jobs/${job.id}/photos`, {
           headers: { "x-dev-user-id": assignedCleanerUserId },
         }), 200) as Array<{ id: number; kind: string }>;
