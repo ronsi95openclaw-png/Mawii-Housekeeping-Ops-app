@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import http, { type Server } from "node:http";
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import app from "../app";
 import {
   db,
@@ -107,6 +107,183 @@ describe("ordinary shift payroll records", () => {
       if (entryId) await db.delete(timeEntriesTable).where(eq(timeEntriesTable.id, entryId));
       if (rateId) await db.delete(workerRatesTable).where(eq(workerRatesTable.id, rateId));
       if (employeeId) await db.delete(employeesTable).where(eq(employeesTable.id, employeeId));
+    }
+  }, 30_000);
+
+  it("uses each shift's effective rate and keeps approval retries stable", async () => {
+    const { server, baseUrl } = await startServer();
+    const employeeIds: number[] = [];
+    const rateIds: number[] = [];
+    const entryIds: number[] = [];
+    let periodId: number | undefined;
+
+    try {
+      const [employee] = await db.insert(employeesTable).values({
+        clerkUserId: `${token}-rate-change-cleaner`,
+        name: `${token} rate change cleaner`,
+        role: "cleaner",
+        phone: "+12145550199",
+      }).returning();
+      employeeIds.push(employee!.id);
+
+      const [oldRate] = await db.insert(workerRatesTable).values({
+        employeeId: employee!.id,
+        hourlyRate: "20.00",
+        effectiveFrom: "2031-02-01",
+        effectiveTo: "2031-02-14",
+      }).returning();
+      const [newRate] = await db.insert(workerRatesTable).values({
+        employeeId: employee!.id,
+        hourlyRate: "30.00",
+        effectiveFrom: "2031-02-15",
+      }).returning();
+      rateIds.push(oldRate!.id, newRate!.id);
+
+      const [beforeChange] = await db.insert(timeEntriesTable).values({
+        jobId: 999991,
+        employeeId: employee!.id,
+        clockIn: new Date("2031-02-14T14:00:00.000Z"),
+        clockOut: new Date("2031-02-14T14:30:00.000Z"),
+        correctionStatus: "none",
+      }).returning();
+      const [onChange] = await db.insert(timeEntriesTable).values({
+        jobId: 999992,
+        employeeId: employee!.id,
+        clockIn: new Date("2031-02-15T14:00:00.000Z"),
+        clockOut: new Date("2031-02-15T14:30:00.000Z"),
+        correctionStatus: "none",
+      }).returning();
+      entryIds.push(beforeChange!.id, onChange!.id);
+
+      const [period] = await db.insert(payPeriodsTable).values({
+        startsOn: "2031-02-14",
+        endsOn: "2031-02-15",
+      }).returning();
+      periodId = period!.id;
+
+      const firstApproval = await request(baseUrl, `/pay-periods/${period!.id}/approve`, {
+        method: "POST",
+        headers: ownerHeaders,
+      });
+      expect(firstApproval.status, JSON.stringify(firstApproval.body)).toBe(200);
+
+      const [payout] = await db.select().from(payoutRecordsTable).where(and(
+        eq(payoutRecordsTable.payPeriodId, period!.id),
+        eq(payoutRecordsTable.employeeId, employee!.id),
+      ));
+      expect(payout).toMatchObject({
+        approvedMinutes: 60,
+        hourlyRate: "30.00",
+        amount: "25.00",
+      });
+      const payoutSnapshot = { ...payout! };
+      const periodSnapshot = (await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, period!.id)))[0]!;
+
+      const retry = await request(baseUrl, `/pay-periods/${period!.id}/approve`, {
+        method: "POST",
+        headers: ownerHeaders,
+      });
+      expect(retry.status, JSON.stringify(retry.body)).toBe(200);
+      expect(retry.body).toMatchObject({
+        id: periodSnapshot.id,
+        status: "approved",
+        approvedBy: periodSnapshot.approvedBy,
+        approvedAt: periodSnapshot.approvedAt?.toISOString(),
+      });
+
+      const [payoutAfterRetry] = await db.select().from(payoutRecordsTable).where(eq(payoutRecordsTable.id, payout!.id));
+      expect(payoutAfterRetry).toEqual(payoutSnapshot);
+    } finally {
+      if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+      if (periodId) await db.delete(payoutRecordsTable).where(eq(payoutRecordsTable.payPeriodId, periodId));
+      if (periodId) await db.delete(payPeriodsTable).where(eq(payPeriodsTable.id, periodId));
+      if (entryIds.length) await db.delete(timeEntriesTable).where(inArray(timeEntriesTable.id, entryIds));
+      if (rateIds.length) await db.delete(workerRatesTable).where(inArray(workerRatesTable.id, rateIds));
+      if (employeeIds.length) await db.delete(employeesTable).where(inArray(employeesTable.id, employeeIds));
+    }
+  }, 30_000);
+
+  it("rolls back approval status and earlier payout rows when payout creation fails", async () => {
+    const { server, baseUrl } = await startServer();
+    const employeeIds: number[] = [];
+    const rateIds: number[] = [];
+    const entryIds: number[] = [];
+    let periodId: number | undefined;
+
+    try {
+      const [firstEmployee] = await db.insert(employeesTable).values({
+        clerkUserId: `${token}-rollback-first`,
+        name: `${token} rollback first`,
+        role: "cleaner",
+        phone: "+12145550200",
+      }).returning();
+      const [secondEmployee] = await db.insert(employeesTable).values({
+        clerkUserId: `${token}-rollback-second`,
+        name: `${token} rollback second`,
+        role: "cleaner",
+        phone: "+12145550201",
+      }).returning();
+      employeeIds.push(firstEmployee!.id, secondEmployee!.id);
+
+      const [firstRate] = await db.insert(workerRatesTable).values({
+        employeeId: firstEmployee!.id,
+        hourlyRate: "20.00",
+        effectiveFrom: "2031-03-01",
+      }).returning();
+      const [secondRate] = await db.insert(workerRatesTable).values({
+        employeeId: secondEmployee!.id,
+        hourlyRate: "20.00",
+        effectiveFrom: "2031-03-01",
+      }).returning();
+      rateIds.push(firstRate!.id, secondRate!.id);
+
+      const [firstEntry] = await db.insert(timeEntriesTable).values({
+        jobId: 999993,
+        employeeId: firstEmployee!.id,
+        clockIn: new Date("2031-03-01T14:00:00.000Z"),
+        clockOut: new Date("2031-03-01T14:30:00.000Z"),
+        correctionStatus: "none",
+      }).returning();
+      const [secondEntry] = await db.insert(timeEntriesTable).values({
+        jobId: 999994,
+        employeeId: secondEmployee!.id,
+        clockIn: new Date("2031-03-01T15:00:00.000Z"),
+        clockOut: new Date("2031-03-01T15:30:00.000Z"),
+        correctionStatus: "none",
+      }).returning();
+      entryIds.push(firstEntry!.id, secondEntry!.id);
+
+      const [period] = await db.insert(payPeriodsTable).values({
+        startsOn: "2031-03-01",
+        endsOn: "2031-03-01",
+      }).returning();
+      periodId = period!.id;
+      const [existingPayout] = await db.insert(payoutRecordsTable).values({
+        payPeriodId: period!.id,
+        employeeId: secondEmployee!.id,
+        approvedMinutes: 30,
+        hourlyRate: "99.00",
+        amount: "99.00",
+      }).returning();
+
+      const response = await request(baseUrl, `/pay-periods/${period!.id}/approve`, {
+        method: "POST",
+        headers: ownerHeaders,
+      });
+      expect(response.status, JSON.stringify(response.body)).toBe(500);
+
+      const [afterFailure] = await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, period!.id));
+      expect(afterFailure?.status).toBe("draft");
+      const payouts = await db.select().from(payoutRecordsTable).where(eq(payoutRecordsTable.payPeriodId, period!.id));
+      expect(payouts).toHaveLength(1);
+      expect(payouts[0]).toEqual(existingPayout);
+    } finally {
+      if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+      if (periodId) await db.delete(payoutRecordsTable).where(eq(payoutRecordsTable.payPeriodId, periodId));
+      if (periodId) await db.delete(payPeriodsTable).where(eq(payPeriodsTable.id, periodId));
+      if (entryIds.length) await db.delete(timeEntriesTable).where(inArray(timeEntriesTable.id, entryIds));
+      if (rateIds.length) await db.delete(workerRatesTable).where(inArray(workerRatesTable.id, rateIds));
+      if (employeeIds.length) await db.delete(employeesTable).where(inArray(employeesTable.id, employeeIds));
     }
   }, 30_000);
 });

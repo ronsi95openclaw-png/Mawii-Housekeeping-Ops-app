@@ -173,10 +173,16 @@ describe("payout route authorization and pay-period lifecycle", () => {
 
         const periodBeforeDuplicateApproval = (await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, created.id)))[0]!;
         const payoutBeforeDuplicateApproval = { ...payout! };
-        expectStatus(await request(baseUrl, `/pay-periods/${created.id}/approve`, {
+        const duplicateApproval = expectStatus(await request(baseUrl, `/pay-periods/${created.id}/approve`, {
           method: "POST",
           headers: ownerHeaders,
-        }), 409);
+        }), 200) as { id: number; status: string; approvedBy: number | null; approvedAt: string };
+        expect(duplicateApproval).toMatchObject({
+          id: periodBeforeDuplicateApproval.id,
+          status: "approved",
+          approvedBy: periodBeforeDuplicateApproval.approvedBy,
+          approvedAt: periodBeforeDuplicateApproval.approvedAt?.toISOString(),
+        });
         const periodAfterDuplicateApproval = (await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, created.id)))[0]!;
         const payoutAfterDuplicateApproval = (await db.select().from(payoutRecordsTable).where(eq(payoutRecordsTable.id, payout!.id)))[0]!;
         expect(periodAfterDuplicateApproval).toMatchObject({

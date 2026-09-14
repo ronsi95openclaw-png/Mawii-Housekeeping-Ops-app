@@ -549,7 +549,62 @@ router.post("/notifications/read-all", async (req, res): Promise<void> => {
 
 router.post("/pay-periods", requireRole("owner", "manager"), async (req, res) => { const input = body(req); if (!input.startsOn || !input.endsOn) { res.status(400).json({ error: "startsOn and endsOn are required" }); return; } const [period] = await db.insert(payPeriodsTable).values({ startsOn: input.startsOn, endsOn: input.endsOn }).onConflictDoNothing().returning(); res.status(201).json(period); });
 router.get("/pay-periods", requireRole("owner", "manager"), async (_req, res) => res.json(await db.select().from(payPeriodsTable).orderBy(asc(payPeriodsTable.startsOn))));
-router.post("/pay-periods/:id/approve", requireRole("owner", "manager"), async (req, res) => { const manager = await currentEmployee(req); const periodId = id(req.params.id); const [period] = await db.update(payPeriodsTable).set({ status: "approved", approvedBy: manager?.id, approvedAt: new Date() }).where(and(eq(payPeriodsTable.id, periodId), eq(payPeriodsTable.status, "draft"))).returning(); if (!period) { res.status(409).json({ error: "Pay period is not draft or does not exist" }); return; } const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, new Date(`${period.startsOn}T00:00:00Z`)), lte(timeEntriesTable.clockIn, new Date(`${period.endsOn}T23:59:59Z`)), ne(timeEntriesTable.correctionStatus, "pending"))); const rates = await db.select().from(workerRatesTable); const totals = new Map<number, number>(); for (const entry of entries) { const minutes = calculatePayableMinutes(entry); totals.set(entry.employeeId, (totals.get(entry.employeeId) ?? 0) + minutes); } for (const [employeeId, minutes] of totals) { const rate = rates.find(item => item.employeeId === employeeId); if (rate) await db.insert(payoutRecordsTable).values({ payPeriodId: periodId, employeeId, approvedMinutes: minutes, hourlyRate: rate.hourlyRate, amount: String(minutes / 60 * Number(rate.hourlyRate)) }).onConflictDoNothing(); } res.json(period); });
+router.post("/pay-periods/:id/approve", requireRole("owner", "manager"), async (req, res) => {
+  const manager = await currentEmployee(req);
+  const periodId = id(req.params.id);
+  const result = await db.transaction(async (tx) => {
+    const [existing] = await tx.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, periodId));
+    if (!existing) return { kind: "missing" as const };
+    if (existing.status === "approved") return { kind: "approved" as const, period: existing };
+    if (existing.status !== "draft") return { kind: "conflict" as const };
+
+    const [period] = await tx.update(payPeriodsTable)
+      .set({ status: "approved", approvedBy: manager?.id, approvedAt: new Date() })
+      .where(and(eq(payPeriodsTable.id, periodId), eq(payPeriodsTable.status, "draft")))
+      .returning();
+    if (!period) {
+      const [current] = await tx.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, periodId));
+      return current?.status === "approved"
+        ? { kind: "approved" as const, period: current }
+        : { kind: "conflict" as const };
+    }
+
+    const entries = await tx.select().from(timeEntriesTable)
+      .where(and(
+        gte(timeEntriesTable.clockIn, new Date(`${period.startsOn}T00:00:00Z`)),
+        lte(timeEntriesTable.clockIn, new Date(`${period.endsOn}T23:59:59Z`)),
+        ne(timeEntriesTable.correctionStatus, "pending"),
+      ))
+      .orderBy(asc(timeEntriesTable.clockIn), asc(timeEntriesTable.id));
+    const rates = await tx.select().from(workerRatesTable);
+    const totals = new Map<number, { minutes: number; cents: number; hourlyRate: string }>();
+    for (const entry of entries) {
+      const rate = selectEffectiveWorkerRate(rates, entry.employeeId, entry.clockIn);
+      if (!rate) continue;
+      const minutes = calculatePayableMinutes(entry);
+      const current = totals.get(entry.employeeId) ?? { minutes: 0, cents: 0, hourlyRate: rate.hourlyRate };
+      current.minutes += minutes;
+      current.cents += calculatePayoutCents(minutes, Number(rate.hourlyRate));
+      current.hourlyRate = rate.hourlyRate;
+      totals.set(entry.employeeId, current);
+    }
+    for (const [employeeId, total] of totals) {
+      await tx.insert(payoutRecordsTable).values({
+        payPeriodId: periodId,
+        employeeId,
+        approvedMinutes: total.minutes,
+        hourlyRate: total.hourlyRate,
+        amount: formatPayoutAmountCents(total.cents),
+      });
+    }
+    return { kind: "approved" as const, period };
+  });
+  if (result.kind === "missing" || result.kind === "conflict") {
+    res.status(409).json({ error: "Pay period is not draft or does not exist" });
+    return;
+  }
+  res.json(result.period);
+});
 router.post("/pay-periods/:id/paid", requireRole("owner", "manager"), async (req, res) => { const manager = await currentEmployee(req); const [existing] = await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, id(req.params.id))); if (!existing) { res.status(404).json({ error: "Pay period not found" }); return; } if (!canTransitionPayPeriod(existing.status as "draft" | "approved" | "paid", "paid")) { res.status(409).json({ error: "Pay period must be approved first" }); return; } const [period] = await db.update(payPeriodsTable).set({ status: "paid", paidBy: manager?.id, paidAt: new Date() }).where(and(eq(payPeriodsTable.id, existing.id), eq(payPeriodsTable.status, "approved"))).returning(); res.json(period); });
 router.post("/pay-periods/:id/adjustments", requireRole("owner", "manager"), async (req, res) => { const input = body(req); const reason = typeof input.reason === "string" ? input.reason.trim() : ""; if (!reason) { res.status(400).json({ error: "reason is required" }); return; } const adjustmentCents = parsePayoutAmountCents(input.amount); if (adjustmentCents === null) { res.status(400).json({ error: "amount must be a valid currency amount" }); return; } const [period] = await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, id(req.params.id))); if (!period || period.status !== "approved") { res.status(409).json({ error: "Payout adjustments require an approved unpaid period" }); return; } const manager = await currentEmployee(req); const [existing] = await db.select().from(payoutRecordsTable).where(and(eq(payoutRecordsTable.payPeriodId, id(req.params.id)), eq(payoutRecordsTable.employeeId, Number(input.employeeId)))); if (!existing) { res.status(404).json({ error: "Payout record not found" }); return; } if (existing.adjustmentReason || parsePayoutAmountCents(existing.adjustmentAmount) !== 0) { res.status(409).json({ error: "Payout adjustment already exists" }); return; } const baseCents = parsePayoutAmountCents(existing.amount); if (baseCents === null) { res.status(409).json({ error: "Payout base amount is invalid" }); return; } const [record] = await db.update(payoutRecordsTable).set({ adjustmentAmount: formatPayoutAmountCents(adjustmentCents), adjustmentReason: reason, adjustmentActor: manager?.id, amount: formatPayoutAmountCents(baseCents + adjustmentCents) }).where(eq(payoutRecordsTable.id, existing.id)).returning(); res.json(record); });
 router.get("/reports/owner", requireRole("owner", "manager"), async (req, res) => {
