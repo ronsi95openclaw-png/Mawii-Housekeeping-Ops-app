@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useListJobs, useCreateJob, getListJobsQueryKey } from '@workspace/api-client-react';
 import type { Job } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -23,6 +23,17 @@ export function Schedule() {
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<Job | null>(null);
   const [createDate, setCreateDate] = useState<string | null>(null);
+  const selectionTrigger = useRef<HTMLElement | null>(null);
+
+  const selectJob = (job: Job) => {
+    selectionTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSelected(job);
+  };
+
+  const closeQuickView = () => {
+    setSelected(null);
+    window.setTimeout(() => selectionTrigger.current?.focus(), 0);
+  };
 
   const week = useMemo(() => {
     if (view === 'day') {
@@ -67,9 +78,9 @@ export function Schedule() {
         body="See the shape of the week, then make the next move." 
         action={
           <div className="week-controls">
-            <button className="icon-button" onClick={() => setOffset((v) => v - 1)} data-testid="button-previous-period"><ChevronLeft size={17} /></button>
+            <button className="icon-button" onClick={() => setOffset((v) => v - 1)} aria-label="Previous schedule period" data-testid="button-previous-period"><ChevronLeft size={17} /></button>
             <button className="button button-secondary" onClick={() => setOffset(0)} data-testid="button-current-period">{VIEW_LABELS[view]}</button>
-            <button className="icon-button" onClick={() => setOffset((v) => v + 1)} data-testid="button-next-period"><ChevronRight size={17} /></button>
+            <button className="icon-button" onClick={() => setOffset((v) => v + 1)} aria-label="Next schedule period" data-testid="button-next-period"><ChevronRight size={17} /></button>
             <button className="button button-primary" onClick={() => setCreateDate(todayISO())} data-testid="button-schedule-new-job"><Plus size={16} />New job</button>
           </div>
         }
@@ -89,7 +100,7 @@ export function Schedule() {
         </span>
       </div>
       
-      {view === 'month' ? <MonthBoard days={week} jobList={jobList} anchorMonth={anchorDay.getMonth()} onPick={setSelected} onAdd={setCreateDate} /> : (
+      {view === 'month' ? <MonthBoard days={week} jobList={jobList} anchorMonth={anchorDay.getMonth()} onPick={selectJob} onAdd={setCreateDate} /> : (
       <section className="panel schedule-board" data-testid="schedule-board">
         <div className="schedule-head" style={view === 'day' ? { gridTemplateColumns: '58px 1fr' } : undefined}>
           <span className="eyebrow">{view === 'day' ? 'Day view' : 'Week view'}</span>
@@ -107,9 +118,13 @@ export function Schedule() {
             const dayJobs = jobList.filter((job) => job.scheduledDate === dayISO);
             return (
               <div className="day-column" key={day.toISOString()}>
+                <div className="mobile-agenda-day">
+                  <strong>{day.toLocaleDateString('en-US', { weekday: 'long' })}</strong>
+                  <span>{formatDate(dayISO, { month: 'short', day: 'numeric' })}</span>
+                </div>
                 <button type="button" onClick={() => setCreateDate(dayISO)} className="day-add" aria-label={`Add a job on ${formatDate(dayISO, { weekday: 'long', month: 'short', day: 'numeric' })}`} data-testid={`button-add-job-${dayISO}`}><Plus size={15} /></button>
                 {dayJobs.length ? dayJobs.map((job) => (
-                  <button className={`schedule-job schedule-${job.status}`} key={job.id} onClick={() => setSelected(job)} data-testid={`schedule-job-${job.id}`}>
+                  <button className={`schedule-job schedule-${job.status}`} key={job.id} onClick={() => selectJob(job)} data-testid={`schedule-job-${job.id}`}>
                     <span>{formatTime(job.startTime)}</span>
                     <strong>{job.clientName}</strong>
                     <small>{job.serviceType}</small>
@@ -127,7 +142,7 @@ export function Schedule() {
       </section>
       )}
 
-      {selected && <JobQuickView job={selected} onClose={() => setSelected(null)} />}
+      {selected && <JobQuickView job={selected} onClose={closeQuickView} />}
       {createDate ? <CreateJobDialog pending={create.isPending} initialDate={createDate} onClose={() => setCreateDate(null)} onSubmit={submitCreate} /> : null}
     </div>
   );
@@ -165,12 +180,23 @@ function MonthBoard({ days, jobList, anchorMonth, onPick, onAdd }: { days: Date[
 }
 
 function JobQuickView({ job, onClose }: { job: Job; onClose: () => void }) {
+  const drawer = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    drawer.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   return (
     <div className="drawer-scrim" onClick={onClose}>
-      <aside className="job-drawer" onClick={(e) => e.stopPropagation()}>
+      <aside ref={drawer} className="job-drawer" role="dialog" aria-modal="true" aria-labelledby="job-quick-view-title" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="drawer-head">
-          <div><span className="eyebrow">Job #{String(job.id).padStart(4, '0')}</span><h3>{job.clientName}</h3></div>
-          <button className="icon-button" onClick={onClose} data-testid="button-close-job-drawer"><X size={17} /></button>
+          <div><span className="eyebrow">Job #{String(job.id).padStart(4, '0')}</span><h3 id="job-quick-view-title">{job.clientName}</h3></div>
+          <button className="icon-button" onClick={onClose} aria-label="Close job quick view" data-testid="button-close-job-drawer"><X size={17} /></button>
         </div>
         <Badge tone={statusTone(job.status)}>{statusLabel(job.status)}</Badge>
         <div className="drawer-facts">
