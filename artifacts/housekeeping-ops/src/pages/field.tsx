@@ -158,19 +158,38 @@ function FieldJobDetail({ jobId, assignmentId, initialAssignmentStatus, onBack }
     }});
   };
 
-  const isChecklistComplete = !job.checklist?.some(i => !i.completed);
-  const hasBefore = photos.data?.some(p => p.kind === 'before');
-  const hasAfter = photos.data?.some(p => p.kind === 'after');
-  // The server also refuses completion while a shift is still open, so the button has to
-  // agree — otherwise the tap is rejected and nothing visibly happens.
-  const canComplete = isChecklistComplete && hasBefore && hasAfter && !activeEntry;
+  const incompleteChecklistItems = (job.checklist || []).filter((item) => !item.completed);
+  const hasBefore = Boolean(photos.data?.some((photo) => photo.kind === 'before'));
+  const hasAfter = Boolean(photos.data?.some((photo) => photo.kind === 'after'));
+  const completionBlockers = [
+    ...(incompleteChecklistItems.length
+      ? [`Complete ${incompleteChecklistItems.length} checklist item${incompleteChecklistItems.length === 1 ? '' : 's'}: ${incompleteChecklistItems.map((item) => item.label).join(', ')}`]
+      : []),
+    ...(!hasBefore ? ['Upload a Before proof photo'] : []),
+    ...(!hasAfter ? ['Upload an After proof photo'] : []),
+    ...(activeEntry ? ['Clock out before completing the job'] : []),
+  ];
+  const canComplete = job.status !== 'completed' && completionBlockers.length === 0 && pendingAction !== 'complete';
 
   const handleComplete = () => {
     if (!canComplete) return;
-    completeJob.mutate({ jobId }, { onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: getGetJobQueryKey(jobId) });
-      void qc.invalidateQueries({ queryKey: getListAssignedJobsQueryKey() });
-    }});
+    setPendingAction('complete');
+    setActionFeedback(null);
+    setFailedAction(null);
+    completeJob.mutate({ jobId }, {
+      onSuccess: async () => {
+        await refetch();
+        await qc.invalidateQueries({ queryKey: getGetJobQueryKey(jobId) });
+        await qc.invalidateQueries({ queryKey: getListAssignedJobsQueryKey() });
+        setPendingAction(null);
+        setActionFeedback({ action: 'complete', kind: 'success', message: 'Job completed successfully.' });
+      },
+      onError: () => {
+        setPendingAction(null);
+        setFailedAction({ action: 'complete' });
+        setActionFeedback({ action: 'complete', kind: 'error', message: 'Mawii could not close this job. Try again.' });
+      },
+    });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, kind: 'before' | 'after') => {
