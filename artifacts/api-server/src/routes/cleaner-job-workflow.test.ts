@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import http, { type Server } from "node:http";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
@@ -13,6 +13,21 @@ import {
   proofPhotosTable,
   timeEntriesTable,
 } from "@workspace/db";
+
+const notificationTestState = vi.hoisted(() => ({ failJobCompletionNotifications: false }));
+
+vi.mock("../lib/notifications", async () => {
+  const actual = await vi.importActual<typeof import("../lib/notifications")>("../lib/notifications");
+  return {
+    ...actual,
+    notifyEmployees: async (inputs: Parameters<typeof actual.notifyEmployees>[0]) => {
+      if (notificationTestState.failJobCompletionNotifications && inputs.some((input) => input.kind === "job_completed")) {
+        throw new Error("simulated completion notification failure");
+      }
+      return actual.notifyEmployees(inputs);
+    },
+  };
+});
 
 type Json = Record<string, unknown> | Array<unknown> | null;
 
@@ -294,10 +309,17 @@ describe("cleaner assigned-job workflow", () => {
           method: "POST",
           headers: { "x-dev-user-id": assignedCleanerUserId },
         }), 200);
-        const completed = expectStatus(await request(baseUrl, `/jobs/${job.id}/complete`, {
-          method: "POST",
-          headers: { "x-dev-user-id": assignedCleanerUserId },
-        }), 200) as { status: string };
+        notificationTestState.failJobCompletionNotifications = true;
+        let completionResponse: Awaited<ReturnType<typeof request>>;
+        try {
+          completionResponse = await request(baseUrl, `/jobs/${job.id}/complete`, {
+            method: "POST",
+            headers: { "x-dev-user-id": assignedCleanerUserId },
+          });
+        } finally {
+          notificationTestState.failJobCompletionNotifications = false;
+        }
+        const completed = expectStatus(completionResponse, 200) as { status: string };
         expect(completed.status).toBe("completed");
         const completedRead = expectStatus(await request(baseUrl, `/jobs/${job.id}`, {
           headers: { "x-dev-user-id": assignedCleanerUserId },

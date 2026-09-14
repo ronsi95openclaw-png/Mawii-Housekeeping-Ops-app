@@ -10,6 +10,7 @@ import { canCompleteJob, canTransitionIncident, canTransitionPayPeriod, isChrono
 import { canCleanerAccessJob } from "../lib/job-access";
 import { employeeForClerkUser, notifyEmployees, notifyAssignedCleaners } from "../lib/notifications";
 import { isProofPhotoContentType, isProofPhotoObjectPath, isProofPhotoSize } from "../lib/proof-photos";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 type EmployeePatch = {
@@ -321,13 +322,17 @@ router.post("/jobs/:jobId/complete", async (req, res) => {
   const employee = await currentEmployee(req);
   const [completed] = await db.update(jobsTable).set({ status: "completed", completedAt: new Date(), completedByEmployeeId: employee?.id }).where(eq(jobsTable.id, jobId)).returning();
   await event("job", "Job completed", undefined, jobId);
-  await notifyEmployees((await db.select({ id: employeesTable.id }).from(employeesTable).where(inArray(employeesTable.role, ["owner", "manager"]))).map(({ id: employeeId }) => ({
-    employeeId,
-    jobId,
-    kind: "job_completed",
-    title: "Job completed",
-    body: `${job.clientName} was completed with checklist, proof, and clock-out recorded.`,
-  })));
+  try {
+    await notifyEmployees((await db.select({ id: employeesTable.id }).from(employeesTable).where(inArray(employeesTable.role, ["owner", "manager"]))).map(({ id: employeeId }) => ({
+      employeeId,
+      jobId,
+      kind: "job_completed",
+      title: "Job completed",
+      body: `${job.clientName} was completed with checklist, proof, and clock-out recorded.`,
+    })));
+  } catch (error) {
+    logger.error({ err: error, jobId }, "Job completion notification delivery failed");
+  }
   res.json(completed);
 });
 
