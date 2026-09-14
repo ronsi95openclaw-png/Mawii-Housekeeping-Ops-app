@@ -20,7 +20,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { MapPin, Clock3, Check, Camera, Coffee, AlertTriangle, ChevronRight, X, Image as ImageIcon, Map as MapIcon } from 'lucide-react';
 import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, formatDate, formatTime, statusTone, statusLabel, AddressLink } from '@/lib/shared';
 
-type Feedback = { kind: 'success' | 'error'; message: string };
+type CleanerAction = 'accept' | 'decline' | 'clock-in' | 'clock-out' | 'break' | 'correction' | 'checklist' | 'message' | 'complete' | 'incident';
+type ActionFeedback = { action: CleanerAction; kind: 'success' | 'error'; message: string };
+type FailedAction = { action: CleanerAction; itemId?: number; completed?: boolean } | null;
 
 function assignmentStateLabel(jobStatus: string | undefined, assignmentStatus: string | undefined, hasActiveEntry: boolean) {
   if (jobStatus === 'completed') return { label: 'Completed', tone: 'green' as const };
@@ -114,6 +116,10 @@ function FieldJobDetail({ jobId, assignmentId, initialAssignmentStatus, onBack }
   const [showCorrection, setShowCorrection] = useState(false);
   const [correctionMins, setCorrectionMins] = useState(0);
   const [message, setMessage] = useState('');
+  const [pendingAction, setPendingAction] = useState<CleanerAction | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
+  const [failedAction, setFailedAction] = useState<FailedAction>(null);
+  const [pendingChecklistId, setPendingChecklistId] = useState<number | null>(null);
 
   if (isLoading) return <LoadingState label="Loading job details" />;
   if (isError || !job) return <ErrorState onRetry={() => void refetch()} />;
