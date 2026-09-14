@@ -12,6 +12,38 @@ import { employeeForClerkUser, notifyEmployees, notifyAssignedCleaners } from ".
 import { isProofPhotoContentType, isProofPhotoObjectPath, isProofPhotoSize } from "../lib/proof-photos";
 
 const router: IRouter = Router();
+type EmployeePatch = {
+  name?: string;
+  role?: "owner" | "manager" | "cleaner";
+  phone?: string | null;
+  active?: "true" | "false";
+};
+const employeePatchFields = new Set(["name", "role", "phone", "active"]);
+function parseEmployeePatch(input: unknown): EmployeePatch | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const record = input as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (!keys.length || keys.some((key) => !employeePatchFields.has(key))) return null;
+
+  const patch: EmployeePatch = {};
+  if (Object.hasOwn(record, "name")) {
+    if (typeof record.name !== "string" || !record.name.trim()) return null;
+    patch.name = record.name.trim();
+  }
+  if (Object.hasOwn(record, "role")) {
+    if (record.role !== "owner" && record.role !== "manager" && record.role !== "cleaner") return null;
+    patch.role = record.role;
+  }
+  if (Object.hasOwn(record, "phone")) {
+    if (record.phone !== null && typeof record.phone !== "string") return null;
+    patch.phone = record.phone;
+  }
+  if (Object.hasOwn(record, "active")) {
+    if (record.active !== "true" && record.active !== "false") return null;
+    patch.active = record.active;
+  }
+  return patch;
+}
 router.use((req, res, next) => {
   if (req.method === "POST" && req.path === "/integrations/elevate/jobs") {
     next();
@@ -219,7 +251,12 @@ router.post("/employees/claim", requireAuth, async (req, res): Promise<void> => 
   res.json(claimed);
 });
 router.patch("/employees/:id", requireRole("owner"), async (req, res) => {
-  const [employee] = await db.update(employeesTable).set(body(req)).where(eq(employeesTable.id, id(req.params.id))).returning();
+  const parsed = parseEmployeePatch(body(req));
+  if (!parsed) {
+    res.status(400).json({ error: "Invalid employee update" });
+    return;
+  }
+  const [employee] = await db.update(employeesTable).set(parsed).where(eq(employeesTable.id, id(req.params.id))).returning();
   if (!employee) { res.status(404).json({ error: "Employee not found" }); return; } res.json(employee);
 });
 router.get("/jobs/assigned", async (req, res) => {

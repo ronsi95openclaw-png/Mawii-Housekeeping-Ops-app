@@ -153,6 +153,28 @@ describe("owner and manager operations", () => {
         }), 201) as { employeeId: number; hourlyRate: string; effectiveFrom: string };
         expect(rate).toMatchObject({ employeeId: canonicalEmployee.id, hourlyRate: "24.50", effectiveFrom: "2031-01-01" });
 
+        for (const invalidPatch of [
+          { clerkUserId: `${token}-replacement` },
+          { unexpected: "field" },
+          { name: "   " },
+          { role: "administrator" },
+          {},
+        ]) {
+          expectStatus(await request(baseUrl, `/employees/${canonicalEmployee.id}`, {
+            method: "PATCH",
+            headers: ownerHeaders,
+            body: invalidPatch,
+          }), 400);
+        }
+        const [unchangedBeforeValidPatch] = await db.select().from(employeesTable).where(eq(employeesTable.id, canonicalEmployee.id));
+        expect(unchangedBeforeValidPatch).toMatchObject({
+          clerkUserId: canonicalEmployeeUserId,
+          name: `${token} canonical cleaner`,
+          phone: "+12145550903",
+          role: "cleaner",
+          active: "true",
+        });
+
         const editedEmployee = expectStatus(await request(baseUrl, `/employees/${canonicalEmployee.id}`, {
           method: "PATCH",
           headers: ownerHeaders,
