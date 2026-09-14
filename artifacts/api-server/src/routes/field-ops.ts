@@ -5,7 +5,7 @@ import { db, customersTable, addressesTable, servicePlansTable, serviceOccurrenc
 import { requireActiveEmployee, requireAuth, requireRole } from "../middlewares/auth";
 import { generateOccurrences } from "../lib/recurrence";
 import { calculatePayableMinutes, calculatePayoutCents } from "../lib/time-entries";
-import { formatPayoutAmountCents, parsePayoutAmountCents } from "../lib/payouts";
+import { formatPayoutAmountCents, parsePayoutAmountCents, selectEffectiveWorkerRate } from "../lib/payouts";
 import { canCompleteJob, canTransitionIncident, canTransitionPayPeriod, isChronologicalTimeEntry, isValidBreakMinutes, isValidCorrectionMinutes } from "../lib/operations-rules";
 import { canCleanerAccessJob } from "../lib/job-access";
 import { employeeForClerkUser, notifyEmployees, notifyAssignedCleaners } from "../lib/notifications";
@@ -461,7 +461,7 @@ router.get("/payouts", requireRole("owner", "manager"), async (req, res) => {
   const records = await db.select().from(payoutRecordsTable);
   const exportRows = entries.map(entry => {
     const minutes = calculatePayableMinutes(entry);
-    const rate = rates.find(r => r.employeeId === entry.employeeId);
+    const rate = selectEffectiveWorkerRate(rates, entry.employeeId, entry.clockIn);
     const worker = employees.find(e => e.id === entry.employeeId);
     const period = periods.find(candidate => entry.clockIn >= new Date(`${candidate.startsOn}T00:00:00Z`) && entry.clockIn <= new Date(`${candidate.endsOn}T23:59:59Z`));
     const record = period ? records.find(candidate => candidate.payPeriodId === period.id && candidate.employeeId === entry.employeeId) : undefined;
