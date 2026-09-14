@@ -147,7 +147,7 @@ describe("timekeeping route authorization and timing", () => {
         }), 404);
         expectStatus(await request(baseUrl, `/jobs/${job.id}/time/clock-in`, {
           method: "POST",
-          headers: { "x-dev-user-id": inactiveCleanerUserId },
+          headers: { "x-dev-user-id": `${token}-inactive` },
         }), 403);
         expectStatus(await request(baseUrl, `/jobs/${job.id}/time/clock-in`, {
           method: "POST",
