@@ -240,6 +240,7 @@ router.post("/service-plans/:id/generate", requireRole("owner", "manager"), asyn
       type: "recurrence",
       title: "Service occurrences generated",
       detail: `${rows.length} occurrence(s) generated`,
+      metadata: { planId: plan.id },
     });
     return { kind: "generated" as const, rows };
   });

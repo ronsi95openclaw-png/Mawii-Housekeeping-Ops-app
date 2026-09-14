@@ -93,6 +93,22 @@ function expectStatus(result: { status: number; body: Json }, status: number) {
   return result.body;
 }
 
+function isPlanRecurrenceActivity(
+  activity: { type: string; metadata: Record<string, unknown> },
+  planId: number,
+) {
+  return activity.type === "recurrence" && activity.metadata.planId === planId;
+}
+
+async function planRecurrenceActivities(planId: number) {
+  const activity = await db.select({
+    id: activityEventsTable.id,
+    type: activityEventsTable.type,
+    metadata: activityEventsTable.metadata,
+  }).from(activityEventsTable);
+  return activity.filter((event) => isPlanRecurrenceActivity(event, planId));
+}
+
 describe("recurring-service generation", () => {
   it("requires authentication for generation", async () => {
     const { server, baseUrl } = await startServer();
@@ -116,7 +132,6 @@ describe("recurring-service generation", () => {
       let planId: number | undefined;
       let jobIds: number[] = [];
       let occurrenceIds: number[] = [];
-      const activityBefore = new Set((await db.select({ id: activityEventsTable.id }).from(activityEventsTable)).map((row) => row.id));
 
       try {
         const manager = expectStatus(await request(baseUrl, "/employees", {
@@ -200,10 +215,10 @@ describe("recurring-service generation", () => {
         occurrenceIds = occurrences.map((occurrence) => occurrence.id);
       } finally {
         if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
-        const currentActivity = await db.select({ id: activityEventsTable.id }).from(activityEventsTable);
-        const generatedActivityIds = currentActivity
-          .map((row) => row.id)
-          .filter((id) => !activityBefore.has(id));
+        const ownedPlanId = planId;
+        const generatedActivityIds = ownedPlanId === undefined
+          ? []
+          : (await planRecurrenceActivities(ownedPlanId)).map((activity) => activity.id);
         if (generatedActivityIds.length) {
           await db.delete(activityEventsTable).where(inArray(activityEventsTable.id, generatedActivityIds));
         }
@@ -343,7 +358,7 @@ describe("recurring-service generation", () => {
         preferences: {},
       }).returning();
       planId = plan!.id;
-      const activityBefore = await db.select({ id: activityEventsTable.id }).from(activityEventsTable);
+      const activityBefore = await planRecurrenceActivities(plan!.id);
 
       expectStatus(await request(baseUrl, `/service-plans/${plan!.id}/generate`, {
         method: "POST",
@@ -364,13 +379,19 @@ describe("recurring-service generation", () => {
       const occurrences = await db.select().from(serviceOccurrencesTable).where(eq(serviceOccurrencesTable.planId, plan!.id));
       const jobs = await db.select().from(jobsTable).where(eq(jobsTable.serviceType, `${token} invalid reference service`));
       const [unchangedPlan] = await db.select().from(servicePlansTable).where(eq(servicePlansTable.id, plan!.id));
-      const activityAfter = await db.select({ id: activityEventsTable.id }).from(activityEventsTable);
+      const activityAfter = await planRecurrenceActivities(plan!.id);
       expect(occurrences).toHaveLength(0);
       expect(jobs).toHaveLength(0);
       expect(unchangedPlan?.nextOccurrence).toBe("2030-06-01");
       expect(activityAfter).toEqual(activityBefore);
     } finally {
       if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+      if (planId) {
+        const ownedPlanId = planId;
+        const activityIds = (await planRecurrenceActivities(ownedPlanId))
+          .map((event) => event.id);
+        if (activityIds.length) await db.delete(activityEventsTable).where(inArray(activityEventsTable.id, activityIds));
+      }
       if (planId) await db.delete(servicePlansTable).where(eq(servicePlansTable.id, planId));
       if (addressId) await db.delete(addressesTable).where(eq(addressesTable.id, addressId));
       if (mismatchedCustomerId) await db.delete(customersTable).where(eq(customersTable.id, mismatchedCustomerId));
