@@ -11,6 +11,7 @@ import {
   incidentsTable,
   jobAssignmentsTable,
   jobsTable,
+  proofPhotosTable,
 } from "@workspace/db";
 
 type Json = Record<string, unknown> | Array<unknown> | null;
@@ -70,6 +71,7 @@ describe("incident route authorization and review", () => {
       let ownerId: number | undefined;
       let jobId: number | undefined;
       const incidentIds: number[] = [];
+      const proofPhotoIds: number[] = [];
 
       try {
         expectStatus(await request(baseUrl, "/jobs/1/incidents", {
@@ -148,6 +150,44 @@ describe("incident route authorization and review", () => {
           headers: { "x-dev-user-id": assignedCleanerUserId },
         }), 200);
 
+        const validPhoto = expectStatus(await request(baseUrl, `/jobs/${job.id}/photos`, {
+          method: "POST",
+          headers: { "x-dev-user-id": assignedCleanerUserId },
+          body: {
+            kind: "before",
+            objectPath: "/objects/uploads/00000000-0000-4000-8000-000000000101",
+            contentType: "image/jpeg",
+            byteSize: 1024,
+          },
+        }), 201) as { id: number };
+        proofPhotoIds.push(validPhoto.id);
+        const wrongJobPhoto = (await db.insert(proofPhotosTable).values({
+          jobId: job.id + 1,
+          kind: "after",
+          objectPath: "/objects/uploads/00000000-0000-4000-8000-000000000102",
+          contentType: "image/jpeg",
+          byteSize: 1024,
+        }).returning())[0]!;
+        proofPhotoIds.push(wrongJobPhoto.id);
+        expectStatus(await request(baseUrl, `/jobs/${job.id}/incidents`, {
+          method: "POST",
+          headers: { "x-dev-user-id": assignedCleanerUserId },
+          body: {
+            severity: "high",
+            description: "Missing evidence photo",
+            evidencePhotoIds: [999999999],
+          },
+        }), 422);
+        expectStatus(await request(baseUrl, `/jobs/${job.id}/incidents`, {
+          method: "POST",
+          headers: { "x-dev-user-id": assignedCleanerUserId },
+          body: {
+            severity: "high",
+            description: "Evidence photo belongs to another job",
+            evidencePhotoIds: [wrongJobPhoto.id],
+          },
+        }), 422);
+
         const severities = ["low", "medium", "high", "critical"] as const;
         for (const [index, severity] of severities.entries()) {
           const incident = expectStatus(await request(baseUrl, `/jobs/${job.id}/incidents`, {
@@ -157,7 +197,7 @@ describe("incident route authorization and review", () => {
               type: "safety",
               severity,
               description: `${token} ${severity} incident`,
-              evidencePhotoIds: [7000 + index, 8000 + index],
+              evidencePhotoIds: [validPhoto.id],
             },
           }), 201) as {
             id: number;
@@ -168,13 +208,13 @@ describe("incident route authorization and review", () => {
           };
           incidentIds.push(incident.id);
           expect(incident.severity).toBe(severity);
-          expect(incident.evidencePhotoIds).toEqual([7000 + index, 8000 + index]);
+           expect(incident.evidencePhotoIds).toEqual([validPhoto.id]);
           expect(incident.status).toBe("open");
           expect(incident.history).toEqual([{ toStatus: "open" }]);
 
           const [persisted] = await db.select().from(incidentsTable).where(eq(incidentsTable.id, incident.id));
           expect(persisted?.severity).toBe(severity);
-          expect(persisted?.evidencePhotoIds).toEqual([7000 + index, 8000 + index]);
+           expect(persisted?.evidencePhotoIds).toEqual([validPhoto.id]);
         }
 
         expectStatus(await request(baseUrl, `/jobs/${job.id}/incidents`, {
@@ -306,6 +346,7 @@ describe("incident route authorization and review", () => {
             await db.delete(incidentsTable).where(inArray(incidentsTable.id, ids));
           }
         }
+        if (proofPhotoIds.length) await db.delete(proofPhotosTable).where(inArray(proofPhotosTable.id, proofPhotoIds));
         if (jobId) {
           await db.delete(activityEventsTable).where(eq(activityEventsTable.jobId, jobId));
           await db.delete(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, jobId));
