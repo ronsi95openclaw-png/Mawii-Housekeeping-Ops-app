@@ -36,6 +36,7 @@ export * from './employeeInputRole';
 export * from './employeeRole';
 export * from './employeeUpdate';
 export * from './employeeUpdateRole';
+export * from './errorResponse';
 export * from './fieldMessageInput';
 export * from './fieldMessageInputAudience';
 export * from './generateOccurrencesInput';

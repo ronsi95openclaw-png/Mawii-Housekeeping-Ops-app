@@ -10,5 +10,8 @@ export type SyncElevateMailbox200 = {
   scanned: number;
   created: number;
   alreadyImported: number;
+  skippedPast?: number;
+  customersAdded?: number;
   problems: string[];
+  serverStartedAt?: Date;
 };
