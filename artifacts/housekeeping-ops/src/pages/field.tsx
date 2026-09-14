@@ -30,7 +30,7 @@ function assignmentStateLabel(jobStatus: string | undefined, assignmentStatus: s
   return { label: 'Pending', tone: 'neutral' as const };
 }
 
-function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignment; onSelect: (jobId: number, assignmentId: number, status: string) => void; unread: boolean }) {
+function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignment; onSelect: (jobId: number, assignmentId: number, status: JobAssignment['status']) => void; unread: boolean }) {
   const { data: job, isLoading } = useGetJob(assignment.jobId, { query: { queryKey: getGetJobQueryKey(assignment.jobId) } });
 
   return (
@@ -52,7 +52,7 @@ function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignme
 export function Field() {
   const jobs = useListAssignedJobs();
   const notifications = useListNotifications({ limit: 30 }, { query: { queryKey: getListNotificationsQueryKey({ limit: 30 }), refetchInterval: 30_000 } });
-  const [selected, setSelected] = useState<{ jobId: number; assignmentId: number; status: string } | null>(null);
+  const [selected, setSelected] = useState<{ jobId: number; assignmentId: number; status: JobAssignment['status'] } | null>(null);
 
   const jobsWithUnreadMessages = new Set(
     (notifications.data || []).filter((item) => item.kind === 'message' && !item.readAt && item.jobId).map((item) => item.jobId),
@@ -84,7 +84,7 @@ export function Field() {
   );
 }
 
-function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assignmentId: number; onBack: () => void }) {
+function FieldJobDetail({ jobId, assignmentId, initialAssignmentStatus, onBack }: { jobId: number; assignmentId: number; initialAssignmentStatus: JobAssignment['status']; onBack: () => void }) {
   const qc = useQueryClient();
   const { data: job, isLoading, isError, refetch } = useGetJob(jobId, { query: { queryKey: getGetJobQueryKey(jobId) } });
   
@@ -215,7 +215,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
             <h2>{job.clientName}</h2>
             <p><AddressLink address={job.address} /></p>
           </div>
-          <Badge tone={statusTone(job.status)}>{statusLabel(job.status)}</Badge>
+          <Badge tone={statusTone(job.status || initialAssignmentStatus)}>{statusLabel(job.status || initialAssignmentStatus)}</Badge>
         </div>
         
         <div className="detail-stat-row">
