@@ -146,12 +146,44 @@ describe("owner and manager operations", () => {
           },
         }), 201) as { id: number; clerkUserId: string; role: string };
         canonicalEmployeeId = canonicalEmployee.id;
+        const inactiveCleaner = expectStatus(await request(baseUrl, "/employees", {
+          method: "POST",
+          headers: ownerHeaders,
+          body: {
+            name: `${token} inactive cleaner`,
+            clerkUserId: `${token}-inactive`,
+            role: "cleaner",
+            active: "false",
+          },
+        }), 201) as { id: number };
         const rate = expectStatus(await request(baseUrl, "/worker-rates", {
           method: "POST",
           headers: ownerHeaders,
           body: { employeeId: canonicalEmployee.id, hourlyRate: "24.50", effectiveFrom: "2031-01-01" },
         }), 201) as { employeeId: number; hourlyRate: string; effectiveFrom: string };
         expect(rate).toMatchObject({ employeeId: canonicalEmployee.id, hourlyRate: "24.50", effectiveFrom: "2031-01-01" });
+
+        for (const invalidPatch of [
+          { clerkUserId: `${token}-replacement` },
+          { unexpected: "field" },
+          { name: "   " },
+          { role: "administrator" },
+          {},
+        ]) {
+          expectStatus(await request(baseUrl, `/employees/${canonicalEmployee.id}`, {
+            method: "PATCH",
+            headers: ownerHeaders,
+            body: invalidPatch,
+          }), 400);
+        }
+        const [unchangedBeforeValidPatch] = await db.select().from(employeesTable).where(eq(employeesTable.id, canonicalEmployee.id));
+        expect(unchangedBeforeValidPatch).toMatchObject({
+          clerkUserId: canonicalEmployeeUserId,
+          name: `${token} canonical cleaner`,
+          phone: "+12145550903",
+          role: "cleaner",
+          active: "true",
+        });
 
         const editedEmployee = expectStatus(await request(baseUrl, `/employees/${canonicalEmployee.id}`, {
           method: "PATCH",
@@ -287,6 +319,11 @@ describe("owner and manager operations", () => {
           headers: ownerHeaders,
           body: { employeeId: manager.id },
         }), 422);
+        expectStatus(await request(baseUrl, `/jobs/${job.id}/assignments`, {
+          method: "POST",
+          headers: ownerHeaders,
+          body: { employeeId: inactiveCleaner.id },
+        }), 422);
         const [canonicalAssignment] = await db.select().from(jobAssignmentsTable).where(and(
           eq(jobAssignmentsTable.jobId, job.id),
           eq(jobAssignmentsTable.employeeId, canonicalEmployee.id),
@@ -308,6 +345,14 @@ describe("owner and manager operations", () => {
           body: { employeeIds: [canonicalEmployee.id] },
         }), 200);
         expect((await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, job.id))).length).toBe(1);
+        for (const employeeId of [manager.id, inactiveCleaner.id]) {
+          expectStatus(await request(baseUrl, `/jobs/${job.id}`, {
+            method: "PATCH",
+            headers: ownerHeaders,
+            body: { employeeIds: [employeeId] },
+          }), 422);
+        }
+        expect((await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, job.id))).map((assignment) => assignment.employeeId)).toEqual([canonicalEmployee.id]);
 
         expectStatus(await request(baseUrl, `/jobs/999999/assignments`, {
           method: "POST",
@@ -333,6 +378,43 @@ describe("owner and manager operations", () => {
           },
         }), 422);
         expect((await db.select().from(jobsTable).where(eq(jobsTable.clientName, invalidJobName))).length).toBe(0);
+
+        for (const [suffix, employeeId] of [["manager", manager.id], ["inactive", inactiveCleaner.id]] as const) {
+          const invalidAssignmentJobName = `${token} invalid ${suffix} assignment job`;
+          expectStatus(await request(baseUrl, "/jobs", {
+            method: "POST",
+            headers: ownerHeaders,
+            body: {
+              clientName: invalidAssignmentJobName,
+              address: "901 Invalid Assignment Road, Dallas, TX 75201",
+              scheduledDate: "2031-02-16",
+              startTime: "09:00",
+              endTime: "10:00",
+              serviceType: "Standard cleaning",
+              notes: "Must not persist.",
+              teamMemberIds: [],
+              employeeIds: [employeeId],
+            },
+          }), 422);
+          expect((await db.select().from(jobsTable).where(eq(jobsTable.clientName, invalidAssignmentJobName))).length).toBe(0);
+        }
+
+        const duplicateAssignmentJob = expectStatus(await request(baseUrl, "/jobs", {
+          method: "POST",
+          headers: ownerHeaders,
+          body: {
+            clientName: `${token} duplicate assignment job`,
+            address: "902 Duplicate Assignment Road, Dallas, TX 75201",
+            scheduledDate: "2031-02-17",
+            startTime: "09:00",
+            endTime: "10:00",
+            serviceType: "Standard cleaning",
+            notes: "Duplicate assignment regression.",
+            teamMemberIds: [],
+            employeeIds: [canonicalEmployee.id, canonicalEmployee.id],
+          },
+        }), 201) as { id: number };
+        expect((await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, duplicateAssignmentJob.id))).map((assignment) => assignment.employeeId)).toEqual([canonicalEmployee.id]);
 
         expectStatus(await request(baseUrl, `/customers/${customer.id}`, {
           method: "PATCH",

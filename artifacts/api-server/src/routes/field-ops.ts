@@ -1,17 +1,50 @@
 import { Router, type IRouter } from "express";
 import crypto, { createHash, randomBytes } from "node:crypto";
-import { and, eq, ne, gte, lte, asc, desc, inArray, isNull } from "drizzle-orm";
+import { and, eq, ne, gte, lte, asc, desc, inArray, isNull, sql } from "drizzle-orm";
 import { db, customersTable, addressesTable, servicePlansTable, serviceOccurrencesTable, employeesTable, employeeBindingTokensTable, employeeJobNotesTable, jobAssignmentsTable, timeEntriesTable, proofPhotosTable, incidentsTable, incidentHistoryTable, workerRatesTable, payPeriodsTable, payoutRecordsTable, activityEventsTable, messagesTable, notificationsTable, jobsTable } from "@workspace/db";
 import { requireActiveEmployee, requireAuth, requireRole } from "../middlewares/auth";
 import { generateOccurrences } from "../lib/recurrence";
 import { calculatePayableMinutes, calculatePayoutCents } from "../lib/time-entries";
-import { formatPayoutAmountCents, parsePayoutAmountCents } from "../lib/payouts";
+import { formatPayoutAmountCents, parsePayoutAmountCents, selectEffectiveWorkerRate } from "../lib/payouts";
 import { canCompleteJob, canTransitionIncident, canTransitionPayPeriod, isChronologicalTimeEntry, isValidBreakMinutes, isValidCorrectionMinutes } from "../lib/operations-rules";
 import { canCleanerAccessJob } from "../lib/job-access";
 import { employeeForClerkUser, notifyEmployees, notifyAssignedCleaners } from "../lib/notifications";
 import { isProofPhotoContentType, isProofPhotoObjectPath, isProofPhotoSize } from "../lib/proof-photos";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+type EmployeePatch = {
+  name?: string;
+  role?: "owner" | "manager" | "cleaner";
+  phone?: string | null;
+  active?: "true" | "false";
+};
+const employeePatchFields = new Set(["name", "role", "phone", "active"]);
+function parseEmployeePatch(input: unknown): EmployeePatch | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const record = input as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (!keys.length || keys.some((key) => !employeePatchFields.has(key))) return null;
+
+  const patch: EmployeePatch = {};
+  if (Object.hasOwn(record, "name")) {
+    if (typeof record.name !== "string" || !record.name.trim()) return null;
+    patch.name = record.name.trim();
+  }
+  if (Object.hasOwn(record, "role")) {
+    if (record.role !== "owner" && record.role !== "manager" && record.role !== "cleaner") return null;
+    patch.role = record.role;
+  }
+  if (Object.hasOwn(record, "phone")) {
+    if (record.phone !== null && typeof record.phone !== "string") return null;
+    patch.phone = record.phone;
+  }
+  if (Object.hasOwn(record, "active")) {
+    if (record.active !== "true" && record.active !== "false") return null;
+    patch.active = record.active;
+  }
+  return patch;
+}
 router.use((req, res, next) => {
   if (req.method === "POST" && req.path === "/integrations/elevate/jobs") {
     next();
@@ -134,37 +167,88 @@ router.patch("/service-plans/:id", requireRole("owner", "manager"), async (req, 
 router.post("/service-plans/:id/pause", requireRole("owner", "manager"), async (req, res) => res.json((await db.update(servicePlansTable).set({ pausedAt: new Date() }).where(eq(servicePlansTable.id, id(req.params.id))).returning())[0]));
 router.post("/service-plans/:id/resume", requireRole("owner", "manager"), async (req, res) => res.json((await db.update(servicePlansTable).set({ pausedAt: null }).where(eq(servicePlansTable.id, id(req.params.id))).returning())[0]));
 router.post("/service-plans/:id/generate", requireRole("owner", "manager"), async (req, res) => {
-  const plan = (await db.select().from(servicePlansTable).where(eq(servicePlansTable.id, id(req.params.id))))[0];
-  if (!plan) { res.status(404).json({ error: "Service plan not found" }); return; }
-  if (plan.pausedAt) { res.status(409).json({ error: "Service plan is paused" }); return; }
-  const dates = generateOccurrences(plan.nextOccurrence, { frequency: plan.frequency as any, intervalWeeks: plan.intervalWeeks ?? undefined }, Number(body(req).count ?? 12));
-  const customer = (await db.select().from(customersTable).where(eq(customersTable.id, plan.customerId)))[0];
-  const address = (await db.select().from(addressesTable).where(eq(addressesTable.id, plan.addressId)))[0];
-  if (!customer || !address) { res.status(422).json({ error: "Plan customer/address is missing" }); return; }
-  const rows = [];
-  for (const occurrenceDate of dates) {
-    const existing = (await db.select().from(serviceOccurrencesTable).where(and(eq(serviceOccurrencesTable.planId, plan.id), eq(serviceOccurrencesTable.occurrenceDate, occurrenceDate))))[0];
-    if (existing) { rows.push(existing); continue; }
-    const [job] = await db.insert(jobsTable).values({
-      clientName: customer.name,
-      address: `${address.line1}, ${address.city}, ${address.state} ${address.postalCode}`,
-      scheduledDate: occurrenceDate,
-      startTime: String(plan.preferences.startTime ?? "09:00"),
-      endTime: String(plan.preferences.endTime ?? "12:00"),
-      serviceType: plan.serviceType,
-      status: "scheduled",
-      teamMemberIds: [],
-      checklist: [],
-      photos: [],
-      accessInstructions: address.accessNotes,
-    }).returning();
-    const [occurrence] = await db.insert(serviceOccurrencesTable).values({ planId: plan.id, occurrenceDate, jobId: job.id }).returning();
-    rows.push(occurrence);
+  const planId = id(req.params.id);
+  const requestedCount = body(req).count ?? 12;
+  if (typeof requestedCount !== "number" || !Number.isSafeInteger(requestedCount) || requestedCount < 1 || requestedCount > 100) {
+    res.status(400).json({ error: "count must be an integer between 1 and 100" });
+    return;
   }
-  const next = dates.at(-1);
-  if (next) await db.update(servicePlansTable).set({ nextOccurrence: generateOccurrences(next, { frequency: plan.frequency as any, intervalWeeks: plan.intervalWeeks ?? undefined }, 2)[1]! }).where(eq(servicePlansTable.id, plan.id));
-  await event("recurrence", "Service occurrences generated", `${rows.length} occurrence(s) generated`);
-  res.status(201).json(rows);
+
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`mawii:service-plan-generation:${planId}`}))`);
+    const [plan] = await tx.select().from(servicePlansTable).where(eq(servicePlansTable.id, planId));
+    if (!plan) return { kind: "missing" as const };
+    if (plan.pausedAt) return { kind: "paused" as const };
+
+    const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, plan.customerId));
+    const [address] = await tx.select().from(addressesTable).where(eq(addressesTable.id, plan.addressId));
+    if (!customer || !address || address.customerId !== plan.customerId) return { kind: "invalid-reference" as const };
+
+    const dates = generateOccurrences(
+      plan.nextOccurrence,
+      { frequency: plan.frequency as any, intervalWeeks: plan.intervalWeeks ?? undefined },
+      requestedCount,
+    );
+    const rows = [];
+    for (const occurrenceDate of dates) {
+      const [existing] = await tx.select().from(serviceOccurrencesTable).where(and(
+        eq(serviceOccurrencesTable.planId, plan.id),
+        eq(serviceOccurrencesTable.occurrenceDate, occurrenceDate),
+      ));
+      if (existing) {
+        rows.push(existing);
+        continue;
+      }
+
+      const [job] = await tx.insert(jobsTable).values({
+        clientName: customer.name,
+        address: `${address.line1}, ${address.city}, ${address.state} ${address.postalCode}`,
+        scheduledDate: occurrenceDate,
+        startTime: String(plan.preferences.startTime ?? "09:00"),
+        endTime: String(plan.preferences.endTime ?? "12:00"),
+        serviceType: plan.serviceType,
+        status: "scheduled",
+        teamMemberIds: [],
+        checklist: [],
+        photos: [],
+        accessInstructions: address.accessNotes,
+      }).returning();
+      const [occurrence] = await tx.insert(serviceOccurrencesTable)
+        .values({ planId: plan.id, occurrenceDate, jobId: job.id })
+        .onConflictDoNothing()
+        .returning();
+      if (occurrence) {
+        rows.push(occurrence);
+      } else {
+        await tx.delete(jobsTable).where(eq(jobsTable.id, job.id));
+        const [conflictingOccurrence] = await tx.select().from(serviceOccurrencesTable).where(and(
+          eq(serviceOccurrencesTable.planId, plan.id),
+          eq(serviceOccurrencesTable.occurrenceDate, occurrenceDate),
+        ));
+        if (!conflictingOccurrence) throw new Error("Occurrence conflict did not resolve to an existing row");
+        rows.push(conflictingOccurrence);
+      }
+    }
+
+    const next = dates.at(-1);
+    if (next) {
+      await tx.update(servicePlansTable)
+        .set({ nextOccurrence: generateOccurrences(next, { frequency: plan.frequency as any, intervalWeeks: plan.intervalWeeks ?? undefined }, 2)[1]! })
+        .where(eq(servicePlansTable.id, plan.id));
+    }
+    await tx.insert(activityEventsTable).values({
+      type: "recurrence",
+      title: "Service occurrences generated",
+      detail: `${rows.length} occurrence(s) generated`,
+      metadata: { planId: plan.id },
+    });
+    return { kind: "generated" as const, rows };
+  });
+
+  if (result.kind === "missing") { res.status(404).json({ error: "Service plan not found" }); return; }
+  if (result.kind === "paused") { res.status(409).json({ error: "Service plan is paused" }); return; }
+  if (result.kind === "invalid-reference") { res.status(422).json({ error: "Plan customer/address is missing or mismatched" }); return; }
+  res.status(201).json(result.rows);
 });
 router.post("/occurrences/:id/skip", requireRole("owner", "manager"), async (req, res) => res.json((await db.update(serviceOccurrencesTable).set({ status: "skipped", skippedReason: body(req).reason ?? "Skipped by operator" }).where(eq(serviceOccurrencesTable.id, id(req.params.id))).returning())[0]));
 router.patch("/occurrences/:id", requireRole("owner", "manager"), async (req, res) => res.json((await db.update(serviceOccurrencesTable).set(body(req)).where(eq(serviceOccurrencesTable.id, id(req.params.id))).returning())[0]));
@@ -219,7 +303,12 @@ router.post("/employees/claim", requireAuth, async (req, res): Promise<void> => 
   res.json(claimed);
 });
 router.patch("/employees/:id", requireRole("owner"), async (req, res) => {
-  const [employee] = await db.update(employeesTable).set(body(req)).where(eq(employeesTable.id, id(req.params.id))).returning();
+  const parsed = parseEmployeePatch(body(req));
+  if (!parsed) {
+    res.status(400).json({ error: "Invalid employee update" });
+    return;
+  }
+  const [employee] = await db.update(employeesTable).set(parsed).where(eq(employeesTable.id, id(req.params.id))).returning();
   if (!employee) { res.status(404).json({ error: "Employee not found" }); return; } res.json(employee);
 });
 router.get("/jobs/assigned", async (req, res) => {
@@ -255,13 +344,64 @@ router.post("/assignments/:id/:decision", async (req, res) => {
 });
 
 router.post("/jobs/:jobId/time/clock-in", async (req, res) => {
+  const jobId = id(req.params.jobId);
   const employee = req.authContext ? (await db.select().from(employeesTable).where(eq(employeesTable.clerkUserId, req.authContext.clerkUserId)))[0] : undefined;
-  if (!employee) { res.status(403).json({ error: "No employee profile is linked to this Clerk user" }); return; }
-  if (!(await canAccessJob(req, id(req.params.jobId)))) { res.status(403).json({ error: "Job is not assigned to you" }); return; }
-  if ((await db.select().from(timeEntriesTable).where(and(eq(timeEntriesTable.jobId, id(req.params.jobId)), eq(timeEntriesTable.employeeId, employee.id), isNull(timeEntriesTable.clockOut)))).length) { res.status(409).json({ error: "An active time entry already exists" }); return; }
-  const [entry] = await db.insert(timeEntriesTable).values({ jobId: id(req.params.jobId), employeeId: employee.id, clockIn: new Date() }).returning(); res.status(201).json(entry);
+  if (!employee || employee.active !== "true" || employee.role !== "cleaner") {
+    res.status(403).json({ error: "An active cleaner employee profile is required" });
+    return;
+  }
+  const [job] = await db.select({ id: jobsTable.id }).from(jobsTable).where(eq(jobsTable.id, jobId));
+  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  const [acceptedAssignment] = await db.select({ id: jobAssignmentsTable.id })
+    .from(jobAssignmentsTable)
+    .where(and(
+      eq(jobAssignmentsTable.jobId, jobId),
+      eq(jobAssignmentsTable.employeeId, employee.id),
+      eq(jobAssignmentsTable.status, "accepted"),
+    ));
+  if (!acceptedAssignment) { res.status(403).json({ error: "An accepted job assignment is required" }); return; }
+
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`mawii:time-entry:${jobId}:${employee.id}`}))`);
+    const [openEntry] = await tx.select().from(timeEntriesTable).where(and(
+      eq(timeEntriesTable.jobId, jobId),
+      eq(timeEntriesTable.employeeId, employee.id),
+      isNull(timeEntriesTable.clockOut),
+    ));
+    if (openEntry) return { entry: openEntry, created: false };
+    const [createdEntry] = await tx.insert(timeEntriesTable).values({
+      jobId,
+      employeeId: employee.id,
+      clockIn: new Date(),
+    }).returning();
+    return { entry: createdEntry, created: true };
+  });
+  res.status(result.created ? 201 : 200).json(result.entry);
 });
-router.post("/time-entries/:id/clock-out", async (req, res) => { const entry = (await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, id(req.params.id))))[0]; if (!entry) { res.status(404).json({ error: "Time entry not found" }); return; } if (!(await canAccessJob(req, entry.jobId))) { res.status(403).json({ error: "Time entry is not yours" }); return; } const clockOut = new Date(); if (!isChronologicalTimeEntry(entry.clockIn, clockOut)) { res.status(409).json({ error: "Clock-out must be after clock-in" }); return; } res.json((await db.update(timeEntriesTable).set({ clockOut }).where(eq(timeEntriesTable.id, entry.id)).returning())[0]); });
+router.post("/time-entries/:id/clock-out", async (req, res) => {
+  const timeEntryId = id(req.params.id);
+  const entry = (await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, timeEntryId)))[0];
+  if (!entry) { res.status(404).json({ error: "Time entry not found" }); return; }
+  if (!(await canAccessJob(req, entry.jobId))) { res.status(403).json({ error: "Time entry is not yours" }); return; }
+
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`mawii:time-entry:${entry.jobId}:${entry.employeeId}`}))`);
+    const [current] = await tx.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, timeEntryId));
+    if (!current) return { kind: "missing" as const };
+    if (current.clockOut) return { kind: "completed" as const, entry: current };
+    const clockOut = new Date();
+    if (!isChronologicalTimeEntry(current.clockIn, clockOut)) return { kind: "invalid" as const };
+    const [updated] = await tx.update(timeEntriesTable)
+      .set({ clockOut })
+      .where(and(eq(timeEntriesTable.id, timeEntryId), isNull(timeEntriesTable.clockOut)))
+      .returning();
+    return updated ? { kind: "updated" as const, entry: updated } : { kind: "conflict" as const };
+  });
+  if (result.kind === "missing") { res.status(404).json({ error: "Time entry not found" }); return; }
+  if (result.kind === "invalid") { res.status(409).json({ error: "Clock-out must be after clock-in" }); return; }
+  if (result.kind === "conflict") { res.status(409).json({ error: "Time entry could not be clocked out" }); return; }
+  res.json(result.entry);
+});
 router.post("/time-entries/:id/break", async (req, res) => { const entry = (await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, id(req.params.id))))[0]; if (!entry || !(await canAccessJob(req, entry.jobId))) { res.status(entry ? 403 : 404).json({ error: entry ? "Time entry is not yours" : "Time entry not found" }); return; } const minutes = Number(body(req).minutes ?? 0); if (!isValidBreakMinutes(entry.clockIn, entry.clockOut, minutes)) { res.status(409).json({ error: "Break minutes cannot exceed worked time" }); return; } res.json((await db.update(timeEntriesTable).set({ breaksMinutes: minutes }).where(eq(timeEntriesTable.id, entry.id)).returning())[0]); });
 router.post("/time-entries/:id/correction", async (req, res) => { const entry = (await db.select().from(timeEntriesTable).where(eq(timeEntriesTable.id, id(req.params.id))))[0]; if (!entry || !(await canAccessJob(req, entry.jobId))) { res.status(entry ? 403 : 404).json({ error: entry ? "Time entry is not yours" : "Time entry not found" }); return; } const correctionMinutes = Number(body(req).minutes); if (!isValidCorrectionMinutes(entry.clockIn, entry.clockOut, entry.breaksMinutes, correctionMinutes)) { res.status(409).json({ error: "Correction would create an impossible time entry" }); return; } res.json((await db.update(timeEntriesTable).set({ correctionMinutes, correctionReason: body(req).reason, correctionStatus: "pending" }).where(eq(timeEntriesTable.id, entry.id)).returning())[0]); });
 router.post("/time-entries/:id/approve", requireRole("owner", "manager"), async (req, res) => { const manager = await currentEmployee(req); const [updated] = await db.update(timeEntriesTable).set({ correctionStatus: "approved", approvedAt: new Date(), approvedBy: manager?.id ?? null }).where(and(eq(timeEntriesTable.id, id(req.params.id)), eq(timeEntriesTable.correctionStatus, "pending"))).returning(); if (!updated) { res.status(404).json({ error: "Pending time correction not found" }); return; } await event("time", "Time correction approved", undefined, updated.jobId); res.json(updated); });
@@ -284,13 +424,17 @@ router.post("/jobs/:jobId/complete", async (req, res) => {
   const employee = await currentEmployee(req);
   const [completed] = await db.update(jobsTable).set({ status: "completed", completedAt: new Date(), completedByEmployeeId: employee?.id }).where(eq(jobsTable.id, jobId)).returning();
   await event("job", "Job completed", undefined, jobId);
-  await notifyEmployees((await db.select({ id: employeesTable.id }).from(employeesTable).where(inArray(employeesTable.role, ["owner", "manager"]))).map(({ id: employeeId }) => ({
-    employeeId,
-    jobId,
-    kind: "job_completed",
-    title: "Job completed",
-    body: `${job.clientName} was completed with checklist, proof, and clock-out recorded.`,
-  })));
+  try {
+    await notifyEmployees((await db.select({ id: employeesTable.id }).from(employeesTable).where(inArray(employeesTable.role, ["owner", "manager"]))).map(({ id: employeeId }) => ({
+      employeeId,
+      jobId,
+      kind: "job_completed",
+      title: "Job completed",
+      body: `${job.clientName} was completed with checklist, proof, and clock-out recorded.`,
+    })));
+  } catch (error) {
+    logger.error({ err: error, jobId }, "Job completion notification delivery failed");
+  }
   res.json(completed);
 });
 
@@ -304,10 +448,54 @@ router.post("/jobs/:jobId/photos", async (req, res) => {
     !isProofPhotoContentType(input.contentType) ||
     !isProofPhotoSize(input.byteSize)
   ) { res.status(400).json({ error: "A valid uploaded proof photo, type, size, and kind(before|after) are required" }); return; }
-  const [photo] = await db.insert(proofPhotosTable).values({ jobId: id(req.params.jobId), kind: input.kind, objectPath: input.objectPath, contentType: input.contentType, byteSize: input.byteSize }).returning(); res.status(201).json(photo);
+  const employee = await currentEmployee(req);
+  if (!employee) { res.status(403).json({ error: "No employee profile is linked to this Clerk user" }); return; }
+  const [photo] = await db.insert(proofPhotosTable).values({
+    jobId: id(req.params.jobId),
+    kind: input.kind,
+    objectPath: input.objectPath,
+    contentType: input.contentType,
+    byteSize: input.byteSize,
+    uploadedBy: employee.id,
+    capturedAt: new Date(),
+  }).returning(); res.status(201).json(photo);
 });
 router.get("/jobs/:jobId/photos", async (req, res) => { if (!(await canAccessJob(req, id(req.params.jobId)))) { res.status(403).json({ error: "Job is not assigned to you" }); return; } res.json((await db.select().from(proofPhotosTable).where(eq(proofPhotosTable.jobId, id(req.params.jobId)))).map(photo => ({ ...photo, readUrl: `/api/storage/objects${photo.objectPath.replace("/objects", "")}` }))); });
-router.post("/jobs/:jobId/incidents", async (req, res) => { const jobId = id(req.params.jobId); if (!(await canAccessJob(req, jobId))) { res.status(403).json({ error: "Job is not assigned to you" }); return; } const employee = await currentEmployee(req); const input = body(req); if (!["low", "medium", "high", "critical"].includes(input.severity ?? "medium") || !input.description) { res.status(400).json({ error: "severity and description are required" }); return; } const [incident] = await db.insert(incidentsTable).values({ jobId, type: input.type ?? "qa", severity: input.severity ?? "medium", description: input.description, evidencePhotoIds: input.evidencePhotoIds ?? [], reporterEmployeeId: employee?.id }).returning(); await db.insert(incidentHistoryTable).values({ incidentId: incident.id, toStatus: "open", actorClerkUserId: req.authContext?.clerkUserId }); res.status(201).json({ ...incident, history: [{ toStatus: "open" }] }); });
+router.post("/jobs/:jobId/incidents", async (req, res) => {
+  const jobId = id(req.params.jobId);
+  if (!(await canAccessJob(req, jobId))) { res.status(403).json({ error: "Job is not assigned to this cleaner" }); return; }
+  const employee = await currentEmployee(req);
+  const input = body(req);
+  if (!["low", "medium", "high", "critical"].includes(input.severity ?? "medium") || !input.description) {
+    res.status(400).json({ error: "severity and description are required" });
+    return;
+  }
+  const evidencePhotoIds = input.evidencePhotoIds ?? [];
+  if (!Array.isArray(evidencePhotoIds) || evidencePhotoIds.some((photoId: unknown) => !Number.isSafeInteger(photoId) || (photoId as number) <= 0)) {
+    res.status(400).json({ error: "evidencePhotoIds must contain positive photo IDs" });
+    return;
+  }
+  const uniqueEvidencePhotoIds = [...new Set(evidencePhotoIds as number[])];
+  if (uniqueEvidencePhotoIds.length) {
+    const evidencePhotos = await db.select({ id: proofPhotosTable.id, jobId: proofPhotosTable.jobId })
+      .from(proofPhotosTable)
+      .where(inArray(proofPhotosTable.id, uniqueEvidencePhotoIds));
+    if (evidencePhotos.length !== uniqueEvidencePhotoIds.length || evidencePhotos.some((photo) => photo.jobId !== jobId)) {
+      res.status(422).json({ error: "Evidence photos must exist and belong to this job" });
+      return;
+    }
+  }
+  const [incident] = await db.insert(incidentsTable).values({
+    jobId,
+    type: input.type ?? "qa",
+    severity: input.severity ?? "medium",
+    description: input.description,
+    evidencePhotoIds: uniqueEvidencePhotoIds,
+    reporterEmployeeId: employee?.id,
+  }).returning();
+  await db.insert(incidentHistoryTable).values({ incidentId: incident.id, toStatus: "open", actorClerkUserId: req.authContext?.clerkUserId });
+  res.status(201).json({ ...incident, history: [{ toStatus: "open" }] });
+});
 router.patch("/incidents/:id", requireRole("owner", "manager"), async (req, res) => { const existing = (await db.select().from(incidentsTable).where(eq(incidentsTable.id, id(req.params.id))))[0]; if (!existing) { res.status(404).json({ error: "Incident not found" }); return; } const next = body(req).status; if (!["open", "in_review", "resolved", "reclean"].includes(next)) { res.status(400).json({ error: "Invalid incident status" }); return; } if (!canTransitionIncident(existing.status as "open" | "in_review" | "resolved" | "reclean", next)) { res.status(409).json({ error: `Cannot move incident from ${existing.status} to ${next}` }); return; } const reviewer = await currentEmployee(req); const [incident] = await db.update(incidentsTable).set({ status: next, resolution: body(req).resolution, reviewedBy: reviewer?.id ?? null, reviewedAt: new Date() }).where(eq(incidentsTable.id, existing.id)).returning(); await db.insert(incidentHistoryTable).values({ incidentId: existing.id, fromStatus: existing.status, toStatus: next, note: body(req).note, actorClerkUserId: req.authContext?.clerkUserId }); const history = await db.select().from(incidentHistoryTable).where(eq(incidentHistoryTable.incidentId, existing.id)); res.json({ ...incident, history }); });
 router.get("/incidents", requireRole("owner", "manager"), async (req, res) => { const filter = typeof req.query.status === "string" ? eq(incidentsTable.status, req.query.status) : undefined; const incidents = await db.select().from(incidentsTable).where(filter); res.json(await Promise.all(incidents.map(async incident => ({ ...incident, history: await db.select().from(incidentHistoryTable).where(eq(incidentHistoryTable.incidentId, incident.id)) })))); });
 
@@ -324,7 +512,7 @@ router.get("/payouts", requireRole("owner", "manager"), async (req, res) => {
   const records = await db.select().from(payoutRecordsTable);
   const exportRows = entries.map(entry => {
     const minutes = calculatePayableMinutes(entry);
-    const rate = rates.find(r => r.employeeId === entry.employeeId);
+    const rate = selectEffectiveWorkerRate(rates, entry.employeeId, entry.clockIn);
     const worker = employees.find(e => e.id === entry.employeeId);
     const period = periods.find(candidate => entry.clockIn >= new Date(`${candidate.startsOn}T00:00:00Z`) && entry.clockIn <= new Date(`${candidate.endsOn}T23:59:59Z`));
     const record = period ? records.find(candidate => candidate.payPeriodId === period.id && candidate.employeeId === entry.employeeId) : undefined;
@@ -412,7 +600,62 @@ router.post("/notifications/read-all", async (req, res): Promise<void> => {
 
 router.post("/pay-periods", requireRole("owner", "manager"), async (req, res) => { const input = body(req); if (!input.startsOn || !input.endsOn) { res.status(400).json({ error: "startsOn and endsOn are required" }); return; } const [period] = await db.insert(payPeriodsTable).values({ startsOn: input.startsOn, endsOn: input.endsOn }).onConflictDoNothing().returning(); res.status(201).json(period); });
 router.get("/pay-periods", requireRole("owner", "manager"), async (_req, res) => res.json(await db.select().from(payPeriodsTable).orderBy(asc(payPeriodsTable.startsOn))));
-router.post("/pay-periods/:id/approve", requireRole("owner", "manager"), async (req, res) => { const manager = await currentEmployee(req); const periodId = id(req.params.id); const [period] = await db.update(payPeriodsTable).set({ status: "approved", approvedBy: manager?.id, approvedAt: new Date() }).where(and(eq(payPeriodsTable.id, periodId), eq(payPeriodsTable.status, "draft"))).returning(); if (!period) { res.status(409).json({ error: "Pay period is not draft or does not exist" }); return; } const entries = await db.select().from(timeEntriesTable).where(and(gte(timeEntriesTable.clockIn, new Date(`${period.startsOn}T00:00:00Z`)), lte(timeEntriesTable.clockIn, new Date(`${period.endsOn}T23:59:59Z`)), ne(timeEntriesTable.correctionStatus, "pending"))); const rates = await db.select().from(workerRatesTable); const totals = new Map<number, number>(); for (const entry of entries) { const minutes = calculatePayableMinutes(entry); totals.set(entry.employeeId, (totals.get(entry.employeeId) ?? 0) + minutes); } for (const [employeeId, minutes] of totals) { const rate = rates.find(item => item.employeeId === employeeId); if (rate) await db.insert(payoutRecordsTable).values({ payPeriodId: periodId, employeeId, approvedMinutes: minutes, hourlyRate: rate.hourlyRate, amount: String(minutes / 60 * Number(rate.hourlyRate)) }).onConflictDoNothing(); } res.json(period); });
+router.post("/pay-periods/:id/approve", requireRole("owner", "manager"), async (req, res) => {
+  const manager = await currentEmployee(req);
+  const periodId = id(req.params.id);
+  const result = await db.transaction(async (tx) => {
+    const [existing] = await tx.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, periodId));
+    if (!existing) return { kind: "missing" as const };
+    if (existing.status === "approved") return { kind: "approved" as const, period: existing };
+    if (existing.status !== "draft") return { kind: "conflict" as const };
+
+    const [period] = await tx.update(payPeriodsTable)
+      .set({ status: "approved", approvedBy: manager?.id, approvedAt: new Date() })
+      .where(and(eq(payPeriodsTable.id, periodId), eq(payPeriodsTable.status, "draft")))
+      .returning();
+    if (!period) {
+      const [current] = await tx.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, periodId));
+      return current?.status === "approved"
+        ? { kind: "approved" as const, period: current }
+        : { kind: "conflict" as const };
+    }
+
+    const entries = await tx.select().from(timeEntriesTable)
+      .where(and(
+        gte(timeEntriesTable.clockIn, new Date(`${period.startsOn}T00:00:00Z`)),
+        lte(timeEntriesTable.clockIn, new Date(`${period.endsOn}T23:59:59Z`)),
+        ne(timeEntriesTable.correctionStatus, "pending"),
+      ))
+      .orderBy(asc(timeEntriesTable.clockIn), asc(timeEntriesTable.id));
+    const rates = await tx.select().from(workerRatesTable);
+    const totals = new Map<number, { minutes: number; cents: number; hourlyRate: string }>();
+    for (const entry of entries) {
+      const rate = selectEffectiveWorkerRate(rates, entry.employeeId, entry.clockIn);
+      if (!rate) continue;
+      const minutes = calculatePayableMinutes(entry);
+      const current = totals.get(entry.employeeId) ?? { minutes: 0, cents: 0, hourlyRate: rate.hourlyRate };
+      current.minutes += minutes;
+      current.cents += calculatePayoutCents(minutes, Number(rate.hourlyRate));
+      current.hourlyRate = rate.hourlyRate;
+      totals.set(entry.employeeId, current);
+    }
+    for (const [employeeId, total] of totals) {
+      await tx.insert(payoutRecordsTable).values({
+        payPeriodId: periodId,
+        employeeId,
+        approvedMinutes: total.minutes,
+        hourlyRate: total.hourlyRate,
+        amount: formatPayoutAmountCents(total.cents),
+      });
+    }
+    return { kind: "approved" as const, period };
+  });
+  if (result.kind === "missing" || result.kind === "conflict") {
+    res.status(409).json({ error: "Pay period is not draft or does not exist" });
+    return;
+  }
+  res.json(result.period);
+});
 router.post("/pay-periods/:id/paid", requireRole("owner", "manager"), async (req, res) => { const manager = await currentEmployee(req); const [existing] = await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, id(req.params.id))); if (!existing) { res.status(404).json({ error: "Pay period not found" }); return; } if (!canTransitionPayPeriod(existing.status as "draft" | "approved" | "paid", "paid")) { res.status(409).json({ error: "Pay period must be approved first" }); return; } const [period] = await db.update(payPeriodsTable).set({ status: "paid", paidBy: manager?.id, paidAt: new Date() }).where(and(eq(payPeriodsTable.id, existing.id), eq(payPeriodsTable.status, "approved"))).returning(); res.json(period); });
 router.post("/pay-periods/:id/adjustments", requireRole("owner", "manager"), async (req, res) => { const input = body(req); const reason = typeof input.reason === "string" ? input.reason.trim() : ""; if (!reason) { res.status(400).json({ error: "reason is required" }); return; } const adjustmentCents = parsePayoutAmountCents(input.amount); if (adjustmentCents === null) { res.status(400).json({ error: "amount must be a valid currency amount" }); return; } const [period] = await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, id(req.params.id))); if (!period || period.status !== "approved") { res.status(409).json({ error: "Payout adjustments require an approved unpaid period" }); return; } const manager = await currentEmployee(req); const [existing] = await db.select().from(payoutRecordsTable).where(and(eq(payoutRecordsTable.payPeriodId, id(req.params.id)), eq(payoutRecordsTable.employeeId, Number(input.employeeId)))); if (!existing) { res.status(404).json({ error: "Payout record not found" }); return; } if (existing.adjustmentReason || parsePayoutAmountCents(existing.adjustmentAmount) !== 0) { res.status(409).json({ error: "Payout adjustment already exists" }); return; } const baseCents = parsePayoutAmountCents(existing.amount); if (baseCents === null) { res.status(409).json({ error: "Payout base amount is invalid" }); return; } const [record] = await db.update(payoutRecordsTable).set({ adjustmentAmount: formatPayoutAmountCents(adjustmentCents), adjustmentReason: reason, adjustmentActor: manager?.id, amount: formatPayoutAmountCents(baseCents + adjustmentCents) }).where(eq(payoutRecordsTable.id, existing.id)).returning(); res.json(record); });
 router.get("/reports/owner", requireRole("owner", "manager"), async (req, res) => {

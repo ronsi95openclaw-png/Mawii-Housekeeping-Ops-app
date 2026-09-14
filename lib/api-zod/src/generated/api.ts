@@ -698,7 +698,10 @@ export const SyncElevateMailboxResponse = zod.object({
   "scanned": zod.number().int(),
   "created": zod.number().int(),
   "alreadyImported": zod.number().int(),
-  "problems": zod.array(zod.string())
+  "skippedPast": zod.number().int().optional(),
+  "customersAdded": zod.number().int().optional(),
+  "problems": zod.array(zod.string()),
+  "serverStartedAt": zod.coerce.date().optional()
 })
 
 
@@ -1662,7 +1665,8 @@ export const ListActivityHistoryResponseItem = zod.object({
   "type": zod.string(),
   "title": zod.string(),
   "detail": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "jobId": zod.number().int().nullish()
 })
 export const ListActivityHistoryResponse = zod.array(ListActivityHistoryResponseItem)
 

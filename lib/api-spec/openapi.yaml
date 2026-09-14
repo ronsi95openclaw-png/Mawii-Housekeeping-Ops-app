@@ -748,6 +748,17 @@ components:
       required: true
       schema: { type: integer }
   schemas:
+    ErrorResponse:
+      type: object
+      required: [error, serverStartedAt]
+      properties:
+        error:
+          type: string
+          description: Generic public error message; implementation details are not exposed.
+        serverStartedAt:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp for when the API process serving the request started.
     HealthStatus:
       type: object
       properties:

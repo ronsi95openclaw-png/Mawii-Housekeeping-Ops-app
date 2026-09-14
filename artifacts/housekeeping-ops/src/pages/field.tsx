@@ -20,16 +20,27 @@ import { useQueryClient } from '@tanstack/react-query';
 import { MapPin, Clock3, Check, Camera, Coffee, AlertTriangle, ChevronRight, X, Image as ImageIcon, Map as MapIcon } from 'lucide-react';
 import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, formatDate, formatTime, statusTone, statusLabel, AddressLink } from '@/lib/shared';
 
-function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignment; onSelect: (jobId: number, assignmentId: number) => void; unread: boolean }) {
+type CleanerAction = 'accept' | 'decline' | 'clock-in' | 'clock-out' | 'break' | 'correction' | 'checklist' | 'message' | 'complete' | 'incident';
+type ActionFeedback = { action: CleanerAction; kind: 'success' | 'error'; message: string };
+
+function assignmentStateLabel(jobStatus: string | undefined, assignmentStatus: string | undefined, hasActiveEntry: boolean) {
+  if (jobStatus === 'completed') return { label: 'Completed', tone: 'green' as const };
+  if (jobStatus === 'in_progress' || hasActiveEntry) return { label: 'In progress', tone: 'orange' as const };
+  if (assignmentStatus === 'accepted') return { label: 'Accepted', tone: 'green' as const };
+  if (assignmentStatus === 'declined') return { label: 'Declined', tone: 'red' as const };
+  return { label: 'Pending', tone: 'neutral' as const };
+}
+
+function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignment; onSelect: (jobId: number, assignmentId: number, status: JobAssignment['status']) => void; unread: boolean }) {
   const { data: job, isLoading } = useGetJob(assignment.jobId, { query: { queryKey: getGetJobQueryKey(assignment.jobId) } });
 
   return (
-    <button className="job-list-row" onClick={() => onSelect(assignment.jobId, assignment.id)} style={{ display: 'grid', gridTemplateColumns: '1fr auto', height: 'auto', padding: '16px' }}>
+    <button className="job-list-row" onClick={() => onSelect(assignment.jobId, assignment.id, assignment.status)} style={{ display: 'grid', gridTemplateColumns: '1fr auto', height: 'auto', padding: '16px' }}>
       <div className="job-list-main">
         <div className="job-title-line">
           <strong>{isLoading ? 'Loading...' : (job?.clientName || 'Job')}</strong>
           {unread ? <span className="unread-flag" data-testid={`unread-job-${assignment.jobId}`}>New message</span> : null}
-          <Badge tone={statusTone(job?.status || assignment.status)}>{statusLabel(job?.status || assignment.status)}</Badge>
+          <Badge tone={assignmentStateLabel(job?.status, assignment.status, false).tone}>{assignmentStateLabel(job?.status, assignment.status, false).label}</Badge>
         </div>
         <span><MapPin size={13} /> {job?.address || '—'}</span>
         <small>{job?.serviceType} · {formatDate(job?.scheduledDate)}</small>
@@ -42,7 +53,7 @@ function FieldJobRow({ assignment, onSelect, unread }: { assignment: JobAssignme
 export function Field() {
   const jobs = useListAssignedJobs();
   const notifications = useListNotifications({ limit: 30 }, { query: { queryKey: getListNotificationsQueryKey({ limit: 30 }), refetchInterval: 30_000 } });
-  const [selected, setSelected] = useState<{ jobId: number; assignmentId: number } | null>(null);
+  const [selected, setSelected] = useState<{ jobId: number; assignmentId: number; status: JobAssignment['status'] } | null>(null);
 
   const jobsWithUnreadMessages = new Set(
     (notifications.data || []).filter((item) => item.kind === 'message' && !item.readAt && item.jobId).map((item) => item.jobId),
@@ -54,7 +65,7 @@ export function Field() {
   const assignments = jobs.data || [];
   
   if (selected) {
-    return <FieldJobDetail jobId={selected.jobId} assignmentId={selected.assignmentId} onBack={() => setSelected(null)} />;
+    return <FieldJobDetail jobId={selected.jobId} assignmentId={selected.assignmentId} initialAssignmentStatus={selected.status} onBack={() => setSelected(null)} />;
   }
 
   return (
@@ -64,7 +75,7 @@ export function Field() {
       {assignments.length ? (
         <div className="job-list">
           {assignments.map((assignment) => (
-            <FieldJobRow key={assignment.id} assignment={assignment} unread={jobsWithUnreadMessages.has(assignment.jobId)} onSelect={(jobId, assignmentId) => setSelected({ jobId, assignmentId })} />
+            <FieldJobRow key={assignment.id} assignment={assignment} unread={jobsWithUnreadMessages.has(assignment.jobId)} onSelect={(jobId, assignmentId, status) => setSelected({ jobId, assignmentId, status })} />
           ))}
         </div>
       ) : (
@@ -74,7 +85,7 @@ export function Field() {
   );
 }
 
-function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assignmentId: number; onBack: () => void }) {
+function FieldJobDetail({ jobId, assignmentId, initialAssignmentStatus, onBack }: { jobId: number; assignmentId: number; initialAssignmentStatus: JobAssignment['status']; onBack: () => void }) {
   const qc = useQueryClient();
   const { data: job, isLoading, isError, refetch } = useGetJob(jobId, { query: { queryKey: getGetJobQueryKey(jobId) } });
   
@@ -98,39 +109,139 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
   const photos = useListProofPhotos(jobId, { query: { enabled: !!jobId, queryKey: ['proofPhotos', jobId] } });
 
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadKind, setUploadKind] = useState<'before' | 'after' | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const [incidentText, setIncidentText] = useState('');
   const [incidentSeverity, setIncidentSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
   const [showCorrection, setShowCorrection] = useState(false);
   const [correctionMins, setCorrectionMins] = useState(0);
+  const [correctionReason, setCorrectionReason] = useState('');
   const [message, setMessage] = useState('');
+  const [pendingActions, setPendingActions] = useState<Partial<Record<CleanerAction, boolean>>>({});
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
+  const [retryAction, setRetryAction] = useState<(() => void) | null>(null);
+  const [pendingChecklistId, setPendingChecklistId] = useState<number | null>(null);
+
+  const setActionPending = (action: CleanerAction, pending: boolean) => {
+    setPendingActions((current) => ({ ...current, [action]: pending }));
+  };
+
+  const showActionFeedback = (action: CleanerAction, kind: ActionFeedback['kind'], message: string, retry?: () => void) => {
+    setActionFeedback({ action, kind, message });
+    setRetryAction(kind === 'error' ? retry || null : null);
+  };
 
   if (isLoading) return <LoadingState label="Loading job details" />;
   if (isError || !job) return <ErrorState onRetry={() => void refetch()} />;
 
   const handleRespond = (decision: 'accept' | 'decline') => {
-    respond.mutate({ id: assignmentId, decision }, { onSuccess: () => void qc.invalidateQueries({ queryKey: getListAssignedJobsQueryKey() }) });
+    if (pendingActions[decision]) return;
+    setActionPending(decision, true);
+    setActionFeedback(null);
+    respond.mutate({ id: assignmentId, decision }, {
+      onSuccess: async () => {
+        await qc.invalidateQueries({ queryKey: getListAssignedJobsQueryKey() });
+        await refetch();
+        setActionPending(decision, false);
+        showActionFeedback(decision, 'success', decision === 'accept' ? 'Job accepted.' : 'Job declined.');
+      },
+      onError: () => {
+        setActionPending(decision, false);
+        showActionFeedback(decision, 'error', `Could not ${decision} this job.`, () => handleRespond(decision));
+      },
+    });
   };
 
-  const handleClockIn = () => clockIn.mutate({ jobId }, { onSuccess: () => void activeEntries.refetch() });
+  const handleClockIn = () => {
+    if (pendingActions['clock-in']) return;
+    setActionPending('clock-in', true);
+    setActionFeedback(null);
+    clockIn.mutate({ jobId }, {
+      onSuccess: async () => {
+        await activeEntries.refetch();
+        await refetch();
+        setActionPending('clock-in', false);
+        showActionFeedback('clock-in', 'success', 'You are clocked in.');
+      },
+      onError: () => {
+        setActionPending('clock-in', false);
+        showActionFeedback('clock-in', 'error', 'Could not clock in.', handleClockIn);
+      },
+    });
+  };
   
   const handleClockOut = () => {
     if (!activeEntry) return;
-    clockOut.mutate({ id: activeEntry.id }, { onSuccess: () => void activeEntries.refetch() });
+    if (pendingActions['clock-out']) return;
+    setActionPending('clock-out', true);
+    setActionFeedback(null);
+    clockOut.mutate({ id: activeEntry.id }, {
+      onSuccess: async () => {
+        await activeEntries.refetch();
+        await refetch();
+        setActionPending('clock-out', false);
+        showActionFeedback('clock-out', 'success', 'You are clocked out.');
+      },
+      onError: () => {
+        setActionPending('clock-out', false);
+        showActionFeedback('clock-out', 'error', 'Could not clock out.', handleClockOut);
+      },
+    });
   };
   
   const handleBreak = () => {
     if (!activeEntry) return;
-    breakTime.mutate({ id: activeEntry.id, data: { minutes: 15 } }, { onSuccess: () => void activeEntries.refetch() });
+    if (pendingActions.break) return;
+    setActionPending('break', true);
+    setActionFeedback(null);
+    breakTime.mutate({ id: activeEntry.id, data: { minutes: 15 } }, {
+      onSuccess: async () => {
+        await activeEntries.refetch();
+        setActionPending('break', false);
+        showActionFeedback('break', 'success', '15-minute break recorded.');
+      },
+      onError: () => {
+        setActionPending('break', false);
+        showActionFeedback('break', 'error', 'Could not record the break.', handleBreak);
+      },
+    });
   };
   
   const handleCorrection = () => {
-    if (!activeEntry || !correctionMins) return;
-    correction.mutate({ id: activeEntry.id, data: { minutes: correctionMins, reason: 'Field request' } }, { 
-      onSuccess: () => {
+    if (!activeEntry || !correctionMins || !correctionReason.trim() || pendingActions.correction) return;
+    setActionPending('correction', true);
+    setActionFeedback(null);
+    correction.mutate({ id: activeEntry.id, data: { minutes: correctionMins, reason: correctionReason.trim() } }, {
+      onSuccess: async () => {
+        await activeEntries.refetch();
+        setActionPending('correction', false);
         setShowCorrection(false);
-        void activeEntries.refetch();
-      }
+        setCorrectionMins(0);
+        setCorrectionReason('');
+        showActionFeedback('correction', 'success', 'Time correction sent for review.');
+      },
+      onError: () => {
+        setActionPending('correction', false);
+        showActionFeedback('correction', 'error', 'Could not send the time correction.', handleCorrection);
+      },
+    });
+  };
+
+  const handleChecklist = (itemId: number, completed: boolean) => {
+    if (pendingChecklistId !== null) return;
+    setPendingChecklistId(itemId);
+    setActionFeedback(null);
+    checklist.mutate({ id: job.id, data: { itemId, completed } }, {
+      onSuccess: async () => {
+        await refetch();
+        setPendingChecklistId(null);
+        showActionFeedback('checklist', 'success', completed ? 'Checklist item completed.' : 'Checklist item reopened.');
+      },
+      onError: () => {
+        setPendingChecklistId(null);
+        showActionFeedback('checklist', 'error', 'Could not update that checklist item.', () => handleChecklist(itemId, completed));
+      },
     });
   };
 
@@ -142,19 +253,38 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
     }});
   };
 
-  const isChecklistComplete = !job.checklist?.some(i => !i.completed);
-  const hasBefore = photos.data?.some(p => p.kind === 'before');
-  const hasAfter = photos.data?.some(p => p.kind === 'after');
-  // The server also refuses completion while a shift is still open, so the button has to
-  // agree — otherwise the tap is rejected and nothing visibly happens.
-  const canComplete = isChecklistComplete && hasBefore && hasAfter && !activeEntry;
+  const incompleteChecklistItems = (job.checklist || []).filter((item) => !item.completed);
+  const hasBefore = Boolean(photos.data?.some((photo) => photo.kind === 'before'));
+  const hasAfter = Boolean(photos.data?.some((photo) => photo.kind === 'after'));
+  const completionBlockers = [
+    ...(incompleteChecklistItems.length
+      ? [`Complete ${incompleteChecklistItems.length} checklist item${incompleteChecklistItems.length === 1 ? '' : 's'}: ${incompleteChecklistItems.map((item) => item.label).join(', ')}`]
+      : []),
+    ...(!hasBefore ? ['Upload a Before proof photo'] : []),
+    ...(!hasAfter ? ['Upload an After proof photo'] : []),
+    ...(activeEntry ? ['Clock out before completing the job'] : []),
+  ];
+  const isChecklistComplete = incompleteChecklistItems.length === 0;
+  const canComplete = job.status !== 'completed' && completionBlockers.length === 0 && !pendingActions.complete;
 
   const handleComplete = () => {
     if (!canComplete) return;
-    completeJob.mutate({ jobId }, { onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: getGetJobQueryKey(jobId) });
-      void qc.invalidateQueries({ queryKey: getListAssignedJobsQueryKey() });
-    }});
+    setActionPending('complete', true);
+    setActionFeedback(null);
+    setRetryAction(null);
+    completeJob.mutate({ jobId }, {
+      onSuccess: async () => {
+        await refetch();
+        await qc.invalidateQueries({ queryKey: getGetJobQueryKey(jobId) });
+        await qc.invalidateQueries({ queryKey: getListAssignedJobsQueryKey() });
+        setActionPending('complete', false);
+        showActionFeedback('complete', 'success', 'Job completed successfully.');
+      },
+      onError: () => {
+        setActionPending('complete', false);
+        showActionFeedback('complete', 'error', 'Mawii could not close this job.', handleComplete);
+      },
+    });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, kind: 'before' | 'after') => {
@@ -162,7 +292,9 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
     if (!file) return;
     
     setIsUploading(true);
+    setUploadKind(kind);
     setUploadError(null);
+    setUploadFeedback(null);
     try {
       const { uploadURL, objectPath } = await requestUpload.mutateAsync({
         data: { name: file.name, size: file.size, contentType: file.type }
@@ -181,13 +313,15 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
         jobId, data: { kind, objectPath, contentType: file.type, byteSize: file.size }
       });
 
-      void refetch();
-      void photos.refetch();
+      await refetch();
+      await photos.refetch();
+      setUploadFeedback(`${kind === 'before' ? 'Before' : 'After'} photo saved to job.`);
     } catch (err) {
       console.error(err);
       setUploadError('That photo did not upload. Check your signal and try again.');
     } finally {
       setIsUploading(false);
+      setUploadKind(null);
       e.target.value = '';
     }
   };
@@ -195,7 +329,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
   return (
     <div className="content-stack animate-rise">
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <button className="icon-button" onClick={onBack}><ChevronRight size={17} style={{ transform: 'rotate(180deg)' }}/></button>
+        <button className="icon-button" onClick={onBack} aria-label="Back to my jobs"><ChevronRight size={17} style={{ transform: 'rotate(180deg)' }}/></button>
         <h2 style={{ fontSize: '20px', margin: 0 }}>Job #{String(job.id).padStart(4, '0')}</h2>
       </div>
 
@@ -205,8 +339,15 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
             <h2>{job.clientName}</h2>
             <p><AddressLink address={job.address} /></p>
           </div>
-          <Badge tone={statusTone(job.status)}>{statusLabel(job.status)}</Badge>
+          <Badge tone={statusTone(job.status || initialAssignmentStatus)}>{statusLabel(job.status || initialAssignmentStatus)}</Badge>
         </div>
+
+        {actionFeedback ? (
+          <div className={`action-feedback action-feedback-${actionFeedback.kind}`} role={actionFeedback.kind === 'error' ? 'alert' : 'status'}>
+            <span>{actionFeedback.message}</span>
+            {actionFeedback.kind === 'error' && retryAction ? <button type="button" className="text-button" onClick={retryAction}>Retry</button> : null}
+          </div>
+        ) : null}
         
         <div className="detail-stat-row">
           <div><span>Window</span><strong>{formatTime(job.startTime)} – {formatTime(job.endTime)}</strong></div>
@@ -235,26 +376,32 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
           
           {activeEntry ? (
             <div className="team-actions" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <button className="button button-primary" onClick={handleClockOut} disabled={clockOut.isPending}><Check size={15}/> Clock out</button>
-              <button className="button button-secondary" onClick={handleBreak} disabled={breakTime.isPending}><Coffee size={15}/> 15m Break</button>
+              <button className="button button-primary" onClick={handleClockOut} disabled={Boolean(pendingActions['clock-out'])}><Check size={15}/> {pendingActions['clock-out'] ? 'Clocking out...' : 'Clock out'}</button>
+              <button className="button button-secondary" onClick={handleBreak} disabled={Boolean(pendingActions.break)}><Coffee size={15}/> {pendingActions.break ? 'Recording...' : '15m Break'}</button>
               <button className="button button-secondary" style={{ gridColumn: 'span 2' }} onClick={() => setShowCorrection(!showCorrection)}>Request Correction</button>
             </div>
           ) : (
-            <button className="button button-primary" style={{ width: '100%' }} onClick={handleClockIn} disabled={clockIn.isPending}><Clock3 size={15}/> Clock in</button>
+            <button className="button button-primary" style={{ width: '100%' }} onClick={handleClockIn} disabled={Boolean(pendingActions['clock-in'])}><Clock3 size={15}/> {pendingActions['clock-in'] ? 'Clocking in...' : 'Clock in'}</button>
           )}
-          {clockIn.isError || clockOut.isError ? <p className="form-error" data-testid="text-clock-error">That did not go through. Check your signal and try again.</p> : null}
 
           {showCorrection && activeEntry && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-              <input type="number" placeholder="Mins" style={{ width: '80px', padding: '6px', fontSize: '12px', border: '1px solid hsl(var(--border))', borderRadius: '4px' }} value={correctionMins || ''} onChange={(e) => setCorrectionMins(Number(e.target.value))} />
-              <button className="button button-secondary" onClick={handleCorrection} disabled={correction.isPending}>Submit Request</button>
+            <div className="correction-form">
+              <label>Minutes
+                <input type="number" inputMode="numeric" placeholder="e.g. 15" value={correctionMins || ''} onChange={(e) => setCorrectionMins(Number(e.target.value))} />
+              </label>
+              <label className="correction-reason">Reason
+                <input value={correctionReason} onChange={(e) => setCorrectionReason(e.target.value)} placeholder="What needs correcting?" />
+              </label>
+              {correctionMins ? <p className="muted-copy correction-preview">Requested adjustment: {correctionMins > 0 ? '+' : ''}{correctionMins} minutes.</p> : null}
+              {activeEntry.correctionStatus ? <p className="muted-copy correction-preview">Current correction status: {activeEntry.correctionStatus}.</p> : null}
+              <button className="button button-secondary" onClick={handleCorrection} disabled={!correctionMins || !correctionReason.trim() || Boolean(pendingActions.correction)}>{pendingActions.correction ? 'Sending...' : 'Send request'}</button>
             </div>
           )}
         </div>
 
         <div className="team-actions" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
-          <button className="button button-secondary" onClick={() => handleRespond('accept')} disabled={respond.isPending}>Accept job</button>
-          <button className="button button-secondary" onClick={() => handleRespond('decline')} disabled={respond.isPending} style={{ color: 'hsl(var(--destructive))' }}>Decline</button>
+          <button className="button button-secondary" onClick={() => handleRespond('accept')} disabled={Boolean(pendingActions.accept)}>{pendingActions.accept ? 'Accepting...' : 'Accept job'}</button>
+          <button className="button button-secondary" onClick={() => handleRespond('decline')} disabled={Boolean(pendingActions.decline)} style={{ color: 'hsl(var(--destructive))' }}>{pendingActions.decline ? 'Declining...' : 'Decline'}</button>
         </div>
 
         <div className="detail-section">
@@ -264,7 +411,7 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
           <div className="checklist">
             {job.checklist?.map((item) => (
               <label className={`check-row ${item.completed ? 'check-complete' : ''}`} key={item.id}>
-                <input type="checkbox" checked={item.completed} onChange={(e) => checklist.mutate({ id: job.id, data: { itemId: item.id, completed: e.target.checked } }, { onSuccess: () => void qc.setQueryData(getGetJobQueryKey(job.id), (old: any) => old ? { ...old, checklist: old.checklist.map((c: any) => c.id === item.id ? { ...c, completed: e.target.checked } : c) } : old) })} />
+                <input type="checkbox" checked={item.completed} disabled={pendingChecklistId === item.id} onChange={(e) => handleChecklist(item.id, e.target.checked)} />
                 <span>{item.label}</span>
                 {item.completed && <Check size={15} />}
               </label>
@@ -275,17 +422,20 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
         <div className="detail-section proof-section">
           <div className="detail-section-head">
             <div><span className="eyebrow">Proof</span><h3>Photos</h3></div>
-            {isUploading && <span style={{ fontSize: '10px', color: 'hsl(var(--primary))' }}>Uploading...</span>}
+            {isUploading && <span className="upload-status" role="status">Uploading {uploadKind} photo...</span>}
           </div>
           {uploadError ? <p className="form-error" data-testid="text-upload-error">{uploadError}</p> : null}
+          {uploadFeedback ? <p className="upload-success" role="status">{uploadFeedback}</p> : null}
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-            <label className="button button-secondary" style={{ cursor: 'pointer', textAlign: 'center' }}>
-              <Camera size={14}/> Before
+          <div className="proof-upload-actions">
+            <label className="proof-upload-button">
+              <Camera size={18}/> <span>Before photo</span>
+              <small>{uploadKind === 'before' ? 'Uploading...' : hasBefore ? 'Add another' : 'Required before service'}</small>
               <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => handleFileUpload(e, 'before')} disabled={isUploading} />
             </label>
-            <label className="button button-secondary" style={{ cursor: 'pointer', textAlign: 'center' }}>
-              <Camera size={14}/> After
+            <label className="proof-upload-button">
+              <Camera size={18}/> <span>After photo</span>
+              <small>{uploadKind === 'after' ? 'Uploading...' : hasAfter ? 'Add another' : 'Required after service'}</small>
               <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => handleFileUpload(e, 'after')} disabled={isUploading} />
             </label>
           </div>
@@ -337,21 +487,17 @@ function FieldJobDetail({ jobId, assignmentId, onBack }: { jobId: number; assign
             <strong>Complete Assignment</strong>
           </div>
           {!canComplete && (
-            <div style={{ fontSize: '11px', color: 'hsl(var(--destructive))', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {!isChecklistComplete && <span>• Complete all checklist items</span>}
-              {!hasBefore && <span>• Upload at least one Before photo</span>}
-              {!hasAfter && <span>• Upload at least one After photo</span>}
-              {activeEntry && <span>• Clock out before completing</span>}
+            <div className="completion-blockers">
+              {completionBlockers.map((blocker) => <span key={blocker}>• {blocker}</span>)}
             </div>
           )}
-          {completeJob.isError ? <p className="form-error" data-testid="text-complete-error">Mawii could not close this job. Check your signal and try again.</p> : null}
           <button 
             className="button button-primary" 
             style={{ width: '100%', height: '36px' }} 
-            disabled={!canComplete || completeJob.isPending || job.status === 'completed'}
+            disabled={!canComplete || Boolean(pendingActions.complete) || job.status === 'completed'}
             onClick={handleComplete}
           >
-            {job.status === 'completed' ? 'Job Completed' : completeJob.isPending ? 'Completing...' : 'Complete Job'}
+            {job.status === 'completed' ? 'Job Completed' : pendingActions.complete ? 'Completing...' : 'Complete Job'}
           </button>
         </div>
 

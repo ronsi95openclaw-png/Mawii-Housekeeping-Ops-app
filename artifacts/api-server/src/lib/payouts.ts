@@ -15,6 +15,30 @@ export function formatPayoutAmountCents(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
+export interface EffectiveWorkerRate {
+  id: number;
+  employeeId: number;
+  hourlyRate: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+
+/** Select the latest rate whose inclusive effective-date interval contains a shift date. */
+export function selectEffectiveWorkerRate(
+  rates: readonly EffectiveWorkerRate[],
+  employeeId: number,
+  clockIn: Date,
+): EffectiveWorkerRate | undefined {
+  const shiftDate = clockIn.toISOString().slice(0, 10);
+  return rates
+    .filter((rate) =>
+      rate.employeeId === employeeId
+      && rate.effectiveFrom <= shiftDate
+      && (rate.effectiveTo === null || shiftDate <= rate.effectiveTo),
+    )
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || b.id - a.id)[0];
+}
+
 export interface ApprovedTimeEntry extends TimeEntryInput {
   approved: boolean;
   employeeId: number;

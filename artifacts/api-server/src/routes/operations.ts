@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { requireActiveEmployee, requireRole } from "../middlewares/auth";
 import { normalizeMessageIntent } from "../lib/messages";
-import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import {
   db,
   jobImportEventsTable,
@@ -32,6 +32,7 @@ import {
   UpdateJobParams,
 } from "@workspace/api-zod";
 import { canCleanerAccessJob } from "../lib/job-access";
+import { checkAssignmentEligibility } from "../lib/job-assignments";
 import { employeeForClerkUser, notifyAssignedCleaners, notifyEmployees } from "../lib/notifications";
 
 const router: IRouter = Router();
@@ -470,15 +471,10 @@ router.post("/jobs", requireRole("owner", "manager"), async (req, res) => {
     return;
   }
   const { employeeIds, ...jobInput } = parsed.data;
-  if (employeeIds?.length) {
-    const employees = await db
-      .select({ id: employeesTable.id, active: employeesTable.active, role: employeesTable.role })
-      .from(employeesTable)
-      .where(inArray(employeesTable.id, employeeIds));
-    if (
-      employees.length !== new Set(employeeIds).size ||
-      employees.some((employee) => employee.active !== "true" || employee.role !== "cleaner")
-    ) {
+  const requestedEmployeeIds = employeeIds === undefined ? undefined : [...new Set(employeeIds)];
+  if (requestedEmployeeIds?.length) {
+    const eligibility = await checkAssignmentEligibility(requestedEmployeeIds);
+    if (!eligibility.valid) {
       res.status(422).json({ error: "Only active cleaner employees can be assigned" });
       return;
     }
@@ -494,11 +490,11 @@ router.post("/jobs", requireRole("owner", "manager"), async (req, res) => {
       photos: [],
     })
     .returning();
-  if (employeeIds?.length) {
+  if (requestedEmployeeIds?.length) {
     await db.insert(jobAssignmentsTable).values(
-      employeeIds.map((employeeId) => ({ jobId: job.id, employeeId, status: "assigned" })),
+      requestedEmployeeIds.map((employeeId) => ({ jobId: job.id, employeeId, status: "assigned" })),
     );
-    await notifyEmployees(employeeIds.map((employeeId) => ({
+    await notifyEmployees(requestedEmployeeIds.map((employeeId) => ({
       employeeId,
       jobId: job.id,
       kind: "assignment",
@@ -539,6 +535,13 @@ router.patch("/jobs/:id", requireRole("owner", "manager"), async (req, res) => {
     return;
   }
   const { scheduledDate, employeeIds, ...rest } = body.data;
+  if (employeeIds) {
+    const eligibility = await checkAssignmentEligibility(employeeIds);
+    if (!eligibility.valid) {
+      res.status(422).json({ error: "Only active cleaner employees can be assigned" });
+      return;
+    }
+  }
   const updateData = scheduledDate
     ? { ...rest, scheduledDate: scheduledDate.toISOString().slice(0, 10) }
     : rest;
@@ -557,30 +560,36 @@ router.patch("/jobs/:id", requireRole("owner", "manager"), async (req, res) => {
     return;
   }
   if (employeeIds) {
-    const existingAssignments = await db.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, job.id));
     const requestedIds = new Set(employeeIds);
-    for (const assignment of existingAssignments) {
-      if (!requestedIds.has(assignment.employeeId)) {
-        await db.delete(jobAssignmentsTable).where(eq(jobAssignmentsTable.id, assignment.id));
-      }
-    }
-    for (const employeeId of requestedIds) {
-      const existing = existingAssignments.find((assignment) => assignment.employeeId === employeeId);
-      if (existing) {
-        if (existing.status === "declined") {
-          await db.update(jobAssignmentsTable).set({ status: "assigned" }).where(eq(jobAssignmentsTable.id, existing.id));
+    const newAssignmentEmployeeIds = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`mawii:job-assignments:${job.id}`}))`);
+      const existingAssignments = await tx.select().from(jobAssignmentsTable).where(eq(jobAssignmentsTable.jobId, job.id));
+      for (const assignment of existingAssignments) {
+        if (!requestedIds.has(assignment.employeeId)) {
+          await tx.delete(jobAssignmentsTable).where(eq(jobAssignmentsTable.id, assignment.id));
         }
-      } else {
-        await db.insert(jobAssignmentsTable).values({ jobId: job.id, employeeId, status: "assigned" });
-        await notifyEmployees([{
-          employeeId,
-          jobId: job.id,
-          kind: "assignment",
-          title: "New job assignment",
-          body: `${job.clientName} is scheduled for ${job.scheduledDate} at ${job.startTime}. Accept the assignment to begin field work.`,
-        }]);
       }
-    }
+      const insertedEmployeeIds: number[] = [];
+      for (const employeeId of requestedIds) {
+        const existing = existingAssignments.find((assignment) => assignment.employeeId === employeeId);
+        if (existing) {
+          if (existing.status === "declined") {
+            await tx.update(jobAssignmentsTable).set({ status: "assigned" }).where(eq(jobAssignmentsTable.id, existing.id));
+          }
+        } else {
+          await tx.insert(jobAssignmentsTable).values({ jobId: job.id, employeeId, status: "assigned" });
+          insertedEmployeeIds.push(employeeId);
+        }
+      }
+      return insertedEmployeeIds;
+    });
+    await notifyEmployees(newAssignmentEmployeeIds.map((employeeId) => ({
+      employeeId,
+      jobId: job.id,
+      kind: "assignment",
+      title: "New job assignment",
+      body: `${job.clientName} is scheduled for ${job.scheduledDate} at ${job.startTime}. Accept the assignment to begin field work.`,
+    })));
   }
   res.json(await mapJob(job));
 });
@@ -593,29 +602,38 @@ router.post("/jobs/:jobId/assignments", requireRole("owner", "manager"), async (
     return;
   }
   const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
-  const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, employeeId));
-  if (!job || !employee || employee.active !== "true") {
+  const eligibility = await checkAssignmentEligibility([employeeId]);
+  const employee = eligibility.employees[0];
+  if (!job || eligibility.missingEmployeeIds.length) {
     res.status(404).json({ error: "Job or active employee not found" });
     return;
   }
-  if (employee.role !== "cleaner") {
+  if (!eligibility.valid) {
     res.status(422).json({ error: "Only cleaner employees can be assigned to jobs" });
     return;
   }
-  const existing = (await db.select().from(jobAssignmentsTable).where(and(eq(jobAssignmentsTable.jobId, jobId), eq(jobAssignmentsTable.employeeId, employeeId))))[0];
-  if (existing) {
-    const [updated] = await db.update(jobAssignmentsTable).set({ status: "assigned" }).where(eq(jobAssignmentsTable.id, existing.id)).returning();
-    res.status(201).json(updated);
-    return;
+  const { assignment, created } = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`mawii:job-assignments:${jobId}`}))`);
+    const existing = (await tx.select().from(jobAssignmentsTable).where(and(
+      eq(jobAssignmentsTable.jobId, jobId),
+      eq(jobAssignmentsTable.employeeId, employeeId),
+    )))[0];
+    if (existing) {
+      const [updated] = await tx.update(jobAssignmentsTable).set({ status: "assigned" }).where(eq(jobAssignmentsTable.id, existing.id)).returning();
+      return { assignment: updated, created: false };
+    }
+    const [createdAssignment] = await tx.insert(jobAssignmentsTable).values({ jobId, employeeId, status: "assigned" }).returning();
+    return { assignment: createdAssignment, created: true };
+  });
+  if (created) {
+    await notifyEmployees([{
+      employeeId,
+      jobId,
+      kind: "assignment",
+      title: "New job assignment",
+      body: `${job.clientName} is scheduled for ${job.scheduledDate} at ${job.startTime}. Accept the assignment to begin field work.`,
+    }]);
   }
-  const [assignment] = await db.insert(jobAssignmentsTable).values({ jobId, employeeId, status: "assigned" }).returning();
-  await notifyEmployees([{
-    employeeId,
-    jobId,
-    kind: "assignment",
-    title: "New job assignment",
-    body: `${job.clientName} is scheduled for ${job.scheduledDate} at ${job.startTime}. Accept the assignment to begin field work.`,
-  }]);
   await db.insert(activityEventsTable).values({ type: "assignment", title: "Employee assigned", detail: `${employee.name} assigned to ${job.clientName}`, jobId });
   res.status(201).json(assignment);
 });

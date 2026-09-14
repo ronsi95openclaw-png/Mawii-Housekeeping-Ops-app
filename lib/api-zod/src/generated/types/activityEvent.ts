@@ -13,4 +13,6 @@ export interface ActivityEvent {
   /** @nullable */
   detail?: string | null;
   createdAt: Date;
+  /** @nullable */
+  jobId?: number | null;
 }

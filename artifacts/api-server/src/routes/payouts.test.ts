@@ -173,10 +173,16 @@ describe("payout route authorization and pay-period lifecycle", () => {
 
         const periodBeforeDuplicateApproval = (await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, created.id)))[0]!;
         const payoutBeforeDuplicateApproval = { ...payout! };
-        expectStatus(await request(baseUrl, `/pay-periods/${created.id}/approve`, {
+        const duplicateApproval = expectStatus(await request(baseUrl, `/pay-periods/${created.id}/approve`, {
           method: "POST",
           headers: ownerHeaders,
-        }), 409);
+        }), 200) as { id: number; status: string; approvedBy: number | null; approvedAt: string };
+        expect(duplicateApproval).toMatchObject({
+          id: periodBeforeDuplicateApproval.id,
+          status: "approved",
+          approvedBy: periodBeforeDuplicateApproval.approvedBy,
+          approvedAt: periodBeforeDuplicateApproval.approvedAt?.toISOString(),
+        });
         const periodAfterDuplicateApproval = (await db.select().from(payPeriodsTable).where(eq(payPeriodsTable.id, created.id)))[0]!;
         const payoutAfterDuplicateApproval = (await db.select().from(payoutRecordsTable).where(eq(payoutRecordsTable.id, payout!.id)))[0]!;
         expect(periodAfterDuplicateApproval).toMatchObject({
@@ -228,6 +234,74 @@ describe("payout route authorization and pay-period lifecycle", () => {
         if (workerRateId) await db.delete(workerRatesTable).where(eq(workerRatesTable.id, workerRateId));
         const employeeIds = [managerId, cleanerId].filter((id): id is number => id !== undefined);
         if (employeeIds.length) await db.delete(employeesTable).where(inArray(employeesTable.id, employeeIds));
+      }
+    },
+    30_000,
+  );
+
+  it(
+    "uses the rate effective on each payout entry's clock-in date",
+    async () => {
+      const { server, baseUrl } = await startServer();
+      let employeeId: number | undefined;
+      const rateIds: number[] = [];
+      const entryIds: number[] = [];
+
+      try {
+        const [employee] = await db.insert(employeesTable).values({
+          clerkUserId: `${token}-rate-change-cleaner`,
+          name: `${token} rate change cleaner`,
+          role: "cleaner",
+          phone: "+12145550803",
+        }).returning();
+        employeeId = employee!.id;
+
+        const [oldRate] = await db.insert(workerRatesTable).values({
+          employeeId: employee!.id,
+          hourlyRate: "20.00",
+          effectiveFrom: "2031-01-01",
+          effectiveTo: "2031-01-14",
+        }).returning();
+        const [newRate] = await db.insert(workerRatesTable).values({
+          employeeId: employee!.id,
+          hourlyRate: "30.00",
+          effectiveFrom: "2031-01-15",
+        }).returning();
+        rateIds.push(oldRate!.id, newRate!.id);
+
+        const [beforeChange] = await db.insert(timeEntriesTable).values({
+          jobId: 999997,
+          employeeId: employee!.id,
+          clockIn: new Date("2031-01-14T14:00:00.000Z"),
+          clockOut: new Date("2031-01-14T15:00:00.000Z"),
+          correctionStatus: "none",
+        }).returning();
+        const [onChange] = await db.insert(timeEntriesTable).values({
+          jobId: 999998,
+          employeeId: employee!.id,
+          clockIn: new Date("2031-01-15T14:00:00.000Z"),
+          clockOut: new Date("2031-01-15T15:00:00.000Z"),
+          correctionStatus: "none",
+        }).returning();
+        entryIds.push(beforeChange!.id, onChange!.id);
+
+        const response = await request(baseUrl, "/payouts?start=2031-01-14T00:00:00.000Z&end=2031-01-15T23:59:59.000Z", {
+          headers: ownerHeaders,
+        });
+        const rows = expectStatus(response, 200) as Array<{
+          id: number;
+          hourlyRate: string;
+          amount: number;
+        }>;
+        expect(rows).toEqual(expect.arrayContaining([
+          expect.objectContaining({ id: beforeChange!.id, hourlyRate: "20.00", amount: 20 }),
+          expect.objectContaining({ id: onChange!.id, hourlyRate: "30.00", amount: 30 }),
+        ]));
+      } finally {
+        if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+        if (entryIds.length) await db.delete(timeEntriesTable).where(inArray(timeEntriesTable.id, entryIds));
+        if (rateIds.length) await db.delete(workerRatesTable).where(inArray(workerRatesTable.id, rateIds));
+        if (employeeId) await db.delete(employeesTable).where(eq(employeesTable.id, employeeId));
       }
     },
     30_000,

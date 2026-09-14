@@ -5,6 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ErrorResponse {
+  /** Generic public error message; implementation details are not exposed. */
+  error: string;
+  /** ISO-8601 timestamp for when the API process serving the request started. */
+  serverStartedAt: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -767,6 +774,8 @@ export interface ActivityEvent {
   /** @nullable */
   detail?: string | null;
   createdAt: string;
+  /** @nullable */
+  jobId?: number | null;
 }
 
 export type MessageRecordChannel = typeof MessageRecordChannel[keyof typeof MessageRecordChannel];
@@ -959,7 +968,10 @@ export type SyncElevateMailbox200 = {
   scanned: number;
   created: number;
   alreadyImported: number;
+  skippedPast?: number;
+  customersAdded?: number;
   problems: string[];
+  serverStartedAt?: string;
 };
 
 export type ListEmployeesParams = {
