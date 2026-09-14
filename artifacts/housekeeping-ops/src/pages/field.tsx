@@ -21,14 +21,6 @@ import { MapPin, Clock3, Check, Camera, Coffee, AlertTriangle, ChevronRight, X, 
 import { LoadingState, ErrorState, EmptyState, PageIntro, Badge, formatDate, formatTime, statusTone, statusLabel, AddressLink } from '@/lib/shared';
 
 type Feedback = { kind: 'success' | 'error'; message: string };
-type UploadKind = 'before' | 'after';
-type UploadStage = 'preparing' | 'uploading' | 'saving' | null;
-
-const uploadStageLabels: Record<Exclude<UploadStage, null>, string> = {
-  preparing: 'Preparing…',
-  uploading: 'Uploading…',
-  saving: 'Saving…',
-};
 
 function assignmentStateLabel(jobStatus: string | undefined, assignmentStatus: string | undefined, hasActiveEntry: boolean) {
   if (jobStatus === 'completed') return { label: 'Completed', tone: 'green' as const };
@@ -115,11 +107,8 @@ function FieldJobDetail({ jobId, assignmentId, initialAssignmentStatus, onBack }
   
   const photos = useListProofPhotos(jobId, { query: { enabled: !!jobId, queryKey: ['proofPhotos', jobId] } });
 
-  const [uploadKind, setUploadKind] = useState<UploadKind | null>(null);
-  const [uploadStages, setUploadStages] = useState<Record<UploadKind, UploadStage>>({ before: null, after: null });
-  const [uploadErrors, setUploadErrors] = useState<Record<UploadKind, string | null>>({ before: null, after: null });
-  const [uploadSaved, setUploadSaved] = useState<Record<UploadKind, boolean>>({ before: false, after: false });
-  const [retryFiles, setRetryFiles] = useState<Record<UploadKind, File | null>>({ before: null, after: null });
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [incidentText, setIncidentText] = useState('');
   const [incidentSeverity, setIncidentSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
   const [showCorrection, setShowCorrection] = useState(false);
