@@ -169,6 +169,7 @@ function FieldJobDetail({ jobId, assignmentId, initialAssignmentStatus, onBack }
     ...(!hasAfter ? ['Upload an After proof photo'] : []),
     ...(activeEntry ? ['Clock out before completing the job'] : []),
   ];
+  const isChecklistComplete = incompleteChecklistItems.length === 0;
   const canComplete = job.status !== 'completed' && completionBlockers.length === 0 && pendingAction !== 'complete';
 
   const handleComplete = () => {
